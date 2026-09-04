@@ -1,28 +1,3 @@
---[[
-        Reborn v0.1.0 — dark minimalist UI library for Roblox
-        -----------------------------------------------------
-        Vercel/Geist-inspired design language: pure #000 surfaces, 1px hairlines,
-        one blue accent (#0070f3), Geist-style type scale (mapped to Gotham),
-        8/6/4px radii and integer-pixel geometry throughout (every measurement is
-        the exact port of the HTML concept in /concept/reborn-ui-concept.html).
-
-        Single-file on purpose — works with loadstring() and require():
-
-          local Reborn = loadstring(game:HttpGet(
-            "https://raw.githubusercontent.com/Toluwer/Reborn/main/src/Reborn.luau"
-          ))()
-
-          local Window = Reborn:CreateWindow({ Title = "Reborn" })
-          local Main   = Window:Tab("Main")
-          local Sec    = Main:Section("Overview")
-          Sec:Toggle({ Text = "Enable feature", Callback = function(v) end })
-
-        Repo: https://github.com/Toluwer/Reborn
-]]
-
--- ============================================================
---  Services
--- ============================================================
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local TextService = game:GetService("TextService")
@@ -30,37 +5,33 @@ local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.1.0",
+        Version = "0.1.1",
         NotificationsEnabled = true,
         _windows = {},
 }
 
--- ============================================================
---  Theme — maps 1:1 to the concept's CSS variables
--- ============================================================
 local DEFAULT_THEME = {
-        Background   = Color3.fromRGB(0, 0, 0),     -- page black
-        Surface      = Color3.fromRGB(0, 0, 0),     -- window / sidebar / content
-        Overlay      = Color3.fromRGB(17, 17, 17),  -- popovers / toasts / fields (#111)
-        Chip         = Color3.fromRGB(26, 26, 26),  -- keybind chip bg (#1a1a1a)
-        RowHover     = Color3.fromRGB(26, 26, 26),  -- row + tab hover fill (#1a1a1a)
-        OptionHover  = Color3.fromRGB(38, 38, 38),  -- dropdown option hover (#262626)
-        Line         = Color3.fromRGB(38, 38, 38),  -- hairline dividers (#262626)
-        LineStrong   = Color3.fromRGB(51, 51, 51),  -- component borders (#333)
+        Background   = Color3.fromRGB(0, 0, 0),
+        Surface      = Color3.fromRGB(0, 0, 0),
+        Overlay      = Color3.fromRGB(17, 17, 17),
+        Chip         = Color3.fromRGB(26, 26, 26),
+        RowHover     = Color3.fromRGB(26, 26, 26),
+        OptionHover  = Color3.fromRGB(38, 38, 38),
+        Line         = Color3.fromRGB(38, 38, 38),
+        LineStrong   = Color3.fromRGB(51, 51, 51),
         Text         = Color3.fromRGB(237, 237, 237),
         TextMuted    = Color3.fromRGB(161, 161, 161),
         TextFaint    = Color3.fromRGB(136, 136, 136),
-        Accent       = Color3.fromRGB(0, 112, 243),  -- #0070f3
-        AccentHover  = Color3.fromRGB(50, 145, 255), -- #3291ff
-        Success      = Color3.fromRGB(41, 211, 145), -- #29d391
-        Error        = Color3.fromRGB(238, 0, 0),    -- #ee0000
-        ToggleOff    = Color3.fromRGB(31, 31, 31),   -- #1f1f1f
-        Handle       = Color3.fromRGB(255, 255, 255),-- knob / slider handle (control geometry)
+        Accent       = Color3.fromRGB(0, 112, 243),
+        AccentHover  = Color3.fromRGB(50, 145, 255),
+        Success      = Color3.fromRGB(41, 211, 145),
+        Error        = Color3.fromRGB(238, 0, 0),
+        ToggleOff    = Color3.fromRGB(31, 31, 31),
+        Handle       = Color3.fromRGB(255, 255, 255),
 }
 
 Reborn.Theme = DEFAULT_THEME
 
--- Geist -> Gotham type scale (sizes stay integers)
 local F = {
         Regular  = Enum.Font.Gotham,
         Medium   = Enum.Font.GothamMedium,
@@ -69,18 +40,17 @@ local F = {
         Mono     = Enum.Font.Code,
 }
 
--- Geometry constants (px, ported from the concept)
 local GEO = {
         WindowMaxW   = 700,
         WindowMaxH   = 530,
         WindowRadius = 8,
-        Header       = 47,   -- 46px content + 1px divider
-        HeaderPad    = 14,   -- left padding
-        WinBtn       = 44,   -- caption button size (w)
+        Header       = 47,
+        HeaderPad    = 14,
+        WinBtn       = 44,
         WinBtnH      = 36,
         SearchW      = 150,
         SearchH      = 32,
-        Sidebar      = 155,  -- + 1px divider = 156
+        Sidebar      = 155,
         TabH         = 34,
         ContentPadT  = 16,
         ContentPadS  = 18,
@@ -100,26 +70,22 @@ local GEO = {
         ChipH        = 22,
         ChipMinW     = 46,
         Swatch       = 22,
-        PopW         = 172, -- color picker popover
+        PopW         = 172,
         SVH          = 92,
         HueH         = 10,
         FieldW       = 180,
         FieldH       = 30,
         ToastW       = 294,
         Launcher     = 46,
-        GridGap      = 8,   -- two-column gutter
+        GridGap      = 8,
 }
 
--- ============================================================
---  Utilities
--- ============================================================
 local function rnd(x) return math.floor(x + 0.5) end
 local function clamp(v, a, b)
         if v < a then return a elseif v > b then return b end
         return v
 end
 
--- Element constructor
 local function New(className, props)
         local inst = Instance.new(className)
         local parent = nil
@@ -173,7 +139,6 @@ local function tween(inst, time, props, style, dir)
         return t
 end
 
--- Text measurement (for section headers / badges laid out manually)
 local function measureText(text, size, font)
         local ok, w = pcall(function()
                 return TextService:GetTextSize(text, size, font, Vector2.new(4096, size * 2)).X
@@ -182,7 +147,6 @@ local function measureText(text, size, font)
         return rnd(#text * size * 0.58)
 end
 
--- Color helpers
 local function colorToHex(c)
         local function to(v) return string.format("%02X", clamp(math.floor(v * 255 + 0.5), 0, 255)) end
         return "#" .. to(c.R) .. to(c.G) .. to(c.B)
@@ -196,7 +160,6 @@ local function hexToColor(hex)
         return Color3.fromRGB(r, g, b)
 end
 
--- Key name prettifying: "RightShift" -> "Right Shift", "F5" -> "F5"
 local function keyDisplayName(name)
         return (name:gsub("(%l)(%u)", "%1 %2"))
 end
@@ -206,11 +169,6 @@ local MOUSE_NAMES = {
         [Enum.UserInputType.MouseButton2] = "Right Mouse",
         [Enum.UserInputType.MouseButton3] = "Middle Mouse",
 }
-
--- ============================================================
---  Icons — pure geometry (rotated bars), no font/glyph dependency
--- ============================================================
--- Each icon = { SetColor(color), SetTransparency(t), Frames = {...} }
 
 local function iconBars(parent, bars)
         local frames = {}
@@ -235,7 +193,6 @@ local function iconBars(parent, bars)
         return icon
 end
 
--- 18x18 chevron pointing down (rotate container 180 for "up")
 local function iconChevron(parent)
         local c = New("Frame", {
                 Size = UDim2.new(0, 18, 0, 18),
@@ -250,26 +207,31 @@ local function iconChevron(parent)
         return icon
 end
 
--- 18x18 window caption glyphs
 local function iconMinus(parent)
         local c = New("Frame", { Size = UDim2.new(0, 18, 0, 18), BackgroundTransparency = 1, Parent = parent })
-        return iconBars(c, { { x = 1, y = 8, w = 16, h = 2 } })
+        local icon = iconBars(c, { { x = 1, y = 8, w = 16, h = 2 } })
+        icon.Container = c
+        return icon
 end
 
 local function iconPlus(parent)
         local c = New("Frame", { Size = UDim2.new(0, 18, 0, 18), BackgroundTransparency = 1, Parent = parent })
-        return iconBars(c, {
+        local icon = iconBars(c, {
                 { x = 1, y = 8, w = 16, h = 2 },
                 { x = 8, y = 1, w = 2, h = 16 },
         })
+        icon.Container = c
+        return icon
 end
 
 local function iconClose(parent)
         local c = New("Frame", { Size = UDim2.new(0, 18, 0, 18), BackgroundTransparency = 1, Parent = parent })
-        return iconBars(c, {
+        local icon = iconBars(c, {
                 { x = 1, y = 8, w = 16, h = 2, rot = 45 },
                 { x = 1, y = 8, w = 16, h = 2, rot = -45 },
         })
+        icon.Container = c
+        return icon
 end
 
 local function iconSearch(parent)
@@ -284,7 +246,7 @@ local function iconSearch(parent)
         corner(ring, 6)
         local ringStroke = stroke(ring, Color3.new(1, 1, 1), 0, 2)
         local bars = iconBars(c, { { x = 11, y = 13, w = 6, h = 2, rot = 45 } })
-        local icon = { Frames = bars.Frames, _ringStroke = ringStroke }
+        local icon = { Frames = bars.Frames, _ringStroke = ringStroke, Container = c }
         function icon.SetColor(color)
                 bars.SetColor(color)
                 ringStroke.Color = color
@@ -296,7 +258,6 @@ local function iconSearch(parent)
         return icon
 end
 
--- 12x12 checkmark (dropdown selection)
 local function iconCheck(parent)
         local c = New("Frame", { Size = UDim2.new(0, 12, 0, 12), BackgroundTransparency = 1, Parent = parent })
         local icon = iconBars(c, {
@@ -307,7 +268,6 @@ local function iconCheck(parent)
         return icon
 end
 
--- 15x15 toast glyphs (white geometry inside a colored circle)
 local function glyphInfo(parent)
         return iconBars(parent, { { x = 6, y = 1, w = 2, h = 2 }, { x = 6, y = 5, w = 2, h = 8 } })
 end
@@ -323,9 +283,6 @@ local function glyphCheck(parent)
         })
 end
 
--- ============================================================
---  GUI parent resolution (executor gethui / CoreGui / PlayerGui)
--- ============================================================
 local function resolveParent(config)
         if config and config.Parent then return config.Parent end
         local ok, hidden = pcall(function()
@@ -351,9 +308,6 @@ local function resolveParent(config)
         error("Reborn: no usable GUI parent (no gethui, no CoreGui access, no LocalPlayer) — pass config.Parent")
 end
 
--- ============================================================
---  Toast system (standalone — works with or without a window)
--- ============================================================
 local TOAST_TYPES = {
         info    = { color = DEFAULT_THEME.Accent,  glyph = glyphInfo },
         success = { color = DEFAULT_THEME.Success, glyph = glyphCheck },
@@ -418,7 +372,6 @@ local function buildToastLayer(gui, theme)
                 stroke(toast, theme.LineStrong)
                 padding(toast, 11, 12, 11, 12)
 
-                -- icon
                 local ic = New("Frame", {
                         Position = UDim2.new(0, 0, 0, 1),
                         Size = UDim2.new(0, 15, 0, 15),
@@ -429,7 +382,6 @@ local function buildToastLayer(gui, theme)
                 corner(ic, 8)
                 kind.glyph(ic).SetColor(Color3.new(1, 1, 1))
 
-                -- text column
                 local title = New("TextLabel", {
                         Position = UDim2.new(0, 27, 0, 0),
                         Size = UDim2.new(1, -27, 0, 16),
@@ -457,7 +409,6 @@ local function buildToastLayer(gui, theme)
                         Parent = toast,
                 })
 
-                -- click-to-dismiss overlay
                 local hit = New("TextButton", {
                         Size = UDim2.new(1, 0, 1, 0),
                         BackgroundTransparency = 1,
@@ -473,7 +424,9 @@ local function buildToastLayer(gui, theme)
                         dismiss(state.items[1])
                 end
                 relayout(false)
-                tween(toast, 0.22, { Position = UDim2.new(0, 0, 0, toast.Position.Y.Offset), GroupTransparency = 0 })
+                local targetY = toast.Position.Y.Offset
+                toast.Position = UDim2.new(0, GEO.ToastW + 18, 0, targetY)
+                tween(toast, 0.22, { Position = UDim2.new(0, 0, 0, targetY), GroupTransparency = 0 })
                 task.delay(cfg.Duration or 3.6, function() dismiss(item) end)
                 return item
         end
@@ -481,7 +434,6 @@ local function buildToastLayer(gui, theme)
         return { Layer = layer, Notify = notify }
 end
 
--- standalone notify (no window yet / window destroyed)
 function Reborn:Notify(cfg)
         if not self.NotificationsEnabled then return end
         if #self._windows > 0 then
@@ -503,9 +455,6 @@ function Reborn:Notify(cfg)
         self._toastLayer.Notify(cfg)
 end
 
--- ============================================================
---  Window
--- ============================================================
 function Reborn:CreateWindow(config)
         config = config or {}
 
@@ -537,8 +486,6 @@ function Reborn:CreateWindow(config)
 
         local camera = workspace.CurrentCamera or workspace:WaitForChild("Camera")
 
-        -- --- geometry: even-pixel window clamped to the viewport (port of the
-        --     concept's round(down, min(700, 96vw), 2px) logic) ---
         local function computeSize()
                 local v = camera.ViewportSize
                 local w = config.Size and config.Size.X or GEO.WindowMaxW
@@ -553,15 +500,14 @@ function Reborn:CreateWindow(config)
                 dragged  = false,
                 min      = false,
                 closed   = false,
-                listening = nil,   -- keybind chip in capture mode
-                openPops = {},     -- open popovers { row, pop, close() }
-                keybinds = {},     -- bound { name, keyCode|userInputType, callback }
-                searchRows = {},   -- { frame, text, section }
+                listening = nil,
+                openPops = {},
+                keybinds = {},
+                searchRows = {},
                 sections = {},
                 tabs = {},
         }
 
-        -- ---------- window shell ----------
         local windowFrame = New("CanvasGroup", {
                 Name = "RebornWindow",
                 Size = UDim2.new(0, W, 0, H),
@@ -580,7 +526,6 @@ function Reborn:CreateWindow(config)
                 windowFrame.Position = UDim2.new(0, rnd(v.X / 2 - W / 2), 0, rnd(v.Y / 2 - H / 2))
         end
         recenter()
-        -- intro: fade + rise (port of winIn .4s)
         windowFrame.Position = UDim2.new(0, windowFrame.Position.X.Offset, 0, windowFrame.Position.Y.Offset + 12)
         tween(windowFrame, 0.4, {
                 GroupTransparency = 0,
@@ -591,7 +536,6 @@ function Reborn:CreateWindow(config)
                 recenter()
         end)
 
-        -- ---------- header (47px: 46 content + 1px divider) ----------
         local header = New("Frame", {
                 Size = UDim2.new(1, 0, 0, GEO.Header),
                 BackgroundColor3 = theme.Surface,
@@ -599,7 +543,7 @@ function Reborn:CreateWindow(config)
                 ZIndex = 20,
                 Parent = windowFrame,
         })
-        New("Frame", { -- bottom hairline
+        New("Frame", {
                 Position = UDim2.new(0, 0, 1, -1),
                 Size = UDim2.new(1, 0, 0, 1),
                 BackgroundColor3 = theme.Line,
@@ -607,7 +551,7 @@ function Reborn:CreateWindow(config)
                 Parent = header,
         })
 
-        local clusterW = GEO.SearchW + 9 + GEO.WinBtn + 9 + GEO.WinBtn + 9 + GEO.WinBtn
+        local clusterW = GEO.SearchW + 9 + 28 + 9 + GEO.WinBtn + 9 + GEO.WinBtn
 
         local dragZone = New("Frame", {
                 Position = UDim2.new(0, GEO.HeaderPad, 0, 0),
@@ -636,7 +580,6 @@ function Reborn:CreateWindow(config)
                 Parent = header,
         })
 
-        -- caption button factory (44x36, radius 6, Lucide-style geometry icons)
         local function captionBtn(x, buildIcon, isClose)
                 local b = New("TextButton", {
                         Position = UDim2.new(0, x, 0, 5),
@@ -648,6 +591,7 @@ function Reborn:CreateWindow(config)
                 })
                 corner(b, 6)
                 local icon = buildIcon(b)
+                icon.Container.Position = UDim2.new(0.5, -9, 0.5, -9)
                 icon.SetColor(theme.TextFaint)
                 b.MouseEnter:Connect(function()
                         b.BackgroundTransparency = 0
@@ -667,7 +611,6 @@ function Reborn:CreateWindow(config)
                 return b, icon
         end
 
-        -- search field (collapsed by default, expands like the concept)
         local searchBox = New("TextBox", {
                 Position = UDim2.new(0, 0, 0, 7),
                 Size = UDim2.new(0, 0, 0, GEO.SearchH),
@@ -685,18 +628,38 @@ function Reborn:CreateWindow(config)
                 ClipsDescendants = true,
                 Parent = cluster,
         })
-        corner(searchBox, 7)
+        corner(searchBox, 6)
         local searchStroke = stroke(searchBox, theme.LineStrong, 1)
         padding(searchBox, 0, 9, 0, 9)
 
-        local searchBtn = captionBtn(GEO.SearchW + 9, iconSearch, false)
-        local minBtn, minIcon = captionBtn(GEO.SearchW + 9 + GEO.WinBtn + 9, iconMinus, false)
+        local searchBtn = New("TextButton", {
+                Position = UDim2.new(0, GEO.SearchW + 9, 0, 10),
+                Size = UDim2.new(0, 28, 0, 28),
+                BackgroundTransparency = 1,
+                BackgroundColor3 = theme.RowHover,
+                Text = "",
+                AutoButtonColor = false,
+                Parent = cluster,
+        })
+        corner(searchBtn, 6)
+        local searchIcon = iconSearch(searchBtn)
+        searchIcon.Container.Position = UDim2.new(0.5, -9, 0.5, -9)
+        searchIcon.SetColor(theme.TextFaint)
+        searchBtn.MouseEnter:Connect(function()
+                searchBtn.BackgroundTransparency = 0
+                searchIcon.SetColor(theme.Text)
+        end)
+        searchBtn.MouseLeave:Connect(function()
+                searchBtn.BackgroundTransparency = 1
+                searchIcon.SetColor(theme.TextFaint)
+        end)
+        local minBtn, minIcon = captionBtn(GEO.SearchW + 9 + 28 + 9, iconMinus, false)
         local plusIcon = iconPlus(minBtn)
+        plusIcon.Container.Position = UDim2.new(0.5, -9, 0.5, -9)
         plusIcon.SetColor(theme.TextFaint)
         for _, f in ipairs(plusIcon.Frames) do f.Visible = false end
-        local closeBtn = captionBtn(GEO.SearchW + 9 + GEO.WinBtn * 2 + 18, iconClose, true)
+        local closeBtn = captionBtn(GEO.SearchW + 9 + 28 + 9 + GEO.WinBtn + 9, iconClose, true)
 
-        -- ---------- body (sidebar + content), wrapped for minimize fade ----------
         local bodyGroup = New("CanvasGroup", {
                 Position = UDim2.new(0, 0, 0, GEO.Header),
                 Size = UDim2.new(1, 0, 1, -GEO.Header),
@@ -705,14 +668,13 @@ function Reborn:CreateWindow(config)
                 Parent = windowFrame,
         })
 
-        -- ---------- sidebar ----------
         local sidebar = New("Frame", {
                 Size = UDim2.new(0, GEO.Sidebar, 1, 0),
                 BackgroundColor3 = theme.Surface,
                 BorderSizePixel = 0,
                 Parent = bodyGroup,
         })
-        New("Frame", { -- right hairline (155 + 1 = 156)
+        New("Frame", {
                 Position = UDim2.new(0, GEO.Sidebar, 0, 0),
                 Size = UDim2.new(0, 1, 1, 0),
                 BackgroundColor3 = theme.Line,
@@ -763,7 +725,7 @@ function Reborn:CreateWindow(config)
                 Parent = avatar,
         })
         New("TextLabel", {
-                Position = UDim2.new(0, 36, 0, 12),
+                Position = UDim2.new(0, 36, 0, 6),
                 Size = UDim2.new(1, -40, 0, 14),
                 BackgroundTransparency = 1,
                 Font = F.Medium,
@@ -775,13 +737,12 @@ function Reborn:CreateWindow(config)
                 Parent = sideBottom,
         })
 
-        -- ---------- content (scrolling) ----------
         local content = New("ScrollingFrame", {
                 Position = UDim2.new(0, GEO.Sidebar + 1, 0, 0),
                 Size = UDim2.new(1, -(GEO.Sidebar + 1), 1, 0),
                 BackgroundTransparency = 1,
                 BorderSizePixel = 0,
-                ScrollBarThickness = 9,
+                ScrollBarThickness = 8,
                 ScrollBarImageColor3 = Color3.fromRGB(46, 46, 46),
                 ScrollingDirection = Enum.ScrollingDirection.Y,
                 CanvasSize = UDim2.new(0, 0, 0, 0),
@@ -789,7 +750,6 @@ function Reborn:CreateWindow(config)
                 Parent = bodyGroup,
         })
 
-        -- ---------- launcher (reopen pill after close) ----------
         local launcher = New("CanvasGroup", {
                 AnchorPoint = Vector2.new(1, 1),
                 Position = UDim2.new(1, -22, 1, -14),
@@ -820,12 +780,8 @@ function Reborn:CreateWindow(config)
                 launcher.BackgroundColor3 = theme.Overlay
         end)
 
-        -- ---------- toasts ----------
         local toastLayer = buildToastLayer(gui, theme)
 
-        -- ============================================================
-        --  Drag / minimize / close / reopen
-        -- ============================================================
         local dragState = nil
         dragZone.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -900,9 +856,6 @@ function Reborn:CreateWindow(config)
                 end
         end)
 
-        -- ============================================================
-        --  Search filter
-        -- ============================================================
         local function applyFilter(q)
                 q = tostring(q or ""):lower()
                 for _, e in ipairs(state.searchRows) do
@@ -951,9 +904,6 @@ function Reborn:CreateWindow(config)
                 closeSearch()
         end)
 
-        -- ============================================================
-        --  Rows
-        -- ============================================================
         local function makeRow(section, h)
                 local row = New("Frame", {
                         Size = UDim2.new(1, 0, 0, h),
@@ -976,12 +926,11 @@ function Reborn:CreateWindow(config)
                 return row, s
         end
 
-        local function rowLabel(row, text, h)
+        local function rowLabel(row, text, clear)
                 local lbl = New("TextLabel", {
                         AnchorPoint = Vector2.new(0, 0.5),
                         Position = UDim2.new(0, GEO.RowPad, 0.5, 0),
-                        Size = UDim2.new(0, 0, 0, h or 16),
-                        AutomaticSize = Enum.AutomaticSize.X,
+                        Size = UDim2.new(1, -(GEO.RowPad + (clear or 60)), 0, 16),
                         BackgroundTransparency = 1,
                         Font = F.Medium,
                         TextSize = 13,
@@ -1030,15 +979,20 @@ function Reborn:CreateWindow(config)
                 end
         end
 
-        -- ============================================================
-        --  Components
-        -- ============================================================
+        local function liftRow(row, on)
+                local el = row
+                while el and el ~= content do
+                        if el:IsA("GuiObject") then
+                                el.ZIndex = on and 30 or 1
+                        end
+                        el = el.Parent
+                end
+        end
 
-        -- ---------- Toggle ----------
         local function addToggle(section, cfg)
                 cfg = cfg or {}
                 local row = makeRow(section, GEO.RowH)
-                rowLabel(row, cfg.Text)
+                rowLabel(row, cfg.Text, 66)
                 local btn = overlayBtn(row)
 
                 local track = New("Frame", {
@@ -1053,7 +1007,7 @@ function Reborn:CreateWindow(config)
                 corner(track, GEO.SwitchH / 2)
                 local ts = stroke(track, theme.LineStrong)
                 local knob = New("Frame", {
-                        Position = UDim2.new(0, 3, 0, 2),
+                        Position = UDim2.new(0, 3, 0, 3),
                         Size = UDim2.new(0, GEO.Knob, 0, GEO.Knob),
                         BackgroundColor3 = theme.Handle,
                         BorderSizePixel = 0,
@@ -1068,9 +1022,9 @@ function Reborn:CreateWindow(config)
                 local function render(fire, instant)
                         local nx = value and (GEO.SwitchW - GEO.Knob - 3) or 3
                         if instant then
-                                knob.Position = UDim2.new(0, nx, 0, 2)
+                                knob.Position = UDim2.new(0, nx, 0, 3)
                         else
-                                tween(knob, 0.18, { Position = UDim2.new(0, nx, 0, 2) }, Enum.EasingStyle.Quad)
+                                tween(knob, 0.18, { Position = UDim2.new(0, nx, 0, 3) }, Enum.EasingStyle.Quad)
                         end
                         track.BackgroundColor3 = value and theme.Accent or theme.ToggleOff
                         ts.Color = value and theme.Accent or theme.LineStrong
@@ -1091,7 +1045,6 @@ function Reborn:CreateWindow(config)
                 return tog
         end
 
-        -- ---------- Slider ----------
         local function addSlider(section, cfg)
                 cfg = cfg or {}
                 local row = makeRow(section, GEO.SliderH)
@@ -1103,13 +1056,13 @@ function Reborn:CreateWindow(config)
                         Parent = row,
                 })
                 New("TextLabel", {
-                        Size = UDim2.new(0, 0, 1, 0),
-                        AutomaticSize = Enum.AutomaticSize.X,
+                        Size = UDim2.new(1, -70, 1, 0),
                         BackgroundTransparency = 1,
                         Font = F.Medium,
                         TextSize = 13,
                         TextColor3 = theme.Text,
                         TextXAlignment = Enum.TextXAlignment.Left,
+                        TextTruncate = Enum.TextTruncate.AtEnd,
                         Text = tostring(cfg.Text or ""),
                         Parent = top,
                 })
@@ -1219,11 +1172,10 @@ function Reborn:CreateWindow(config)
                 return sld
         end
 
-        -- ---------- Dropdown ----------
         local function addDropdown(section, cfg)
                 cfg = cfg or {}
                 local row = makeRow(section, GEO.RowH)
-                rowLabel(row, cfg.Text)
+                local lbl = rowLabel(row, cfg.Text, 118)
 
                 local chev = iconChevron(row)
                 chev.Container.AnchorPoint = Vector2.new(1, 0.5)
@@ -1233,8 +1185,7 @@ function Reborn:CreateWindow(config)
                 local val = New("TextLabel", {
                         AnchorPoint = Vector2.new(1, 0.5),
                         Position = UDim2.new(1, -GEO.RowPad - 18 - 7, 0.5, 0),
-                        Size = UDim2.new(0, 0, 0, 16),
-                        AutomaticSize = Enum.AutomaticSize.X,
+                        Size = UDim2.new(0, 60, 0, 16),
                         BackgroundTransparency = 1,
                         Font = F.Medium,
                         TextSize = 13,
@@ -1264,19 +1215,25 @@ function Reborn:CreateWindow(config)
 
         local dd = { Value = cfg.Value or (options[1]) }
                 local optBtns = {}
+                local function fit()
+                        local vw = clamp(measureText(tostring(dd.Value), 13, F.Medium), 24, 160)
+                        val.Size = UDim2.new(0, vw, 0, 16)
+                        lbl.Size = UDim2.new(1, -(GEO.RowPad + 49 + vw), 0, 16)
+                end
 
                 local function setOpen(o)
                         if dd._open == o then return end
                         dd._open = o
-                        row.ZIndex = o and 30 or 1
                         if o then
                                 closeAllPops(pop)
+                                liftRow(row, true)
                                 pop.Visible = true
                                 pop.Position = UDim2.new(0, 0, 1, 10)
                                 tween(pop, 0.16, { GroupTransparency = 0, Position = UDim2.new(0, 0, 1, 6) })
                                 tween(chev.Container, 0.18, { Rotation = 180 })
                                 registerPop(row, pop, setOpen)
                         else
+                                liftRow(row, false)
                                 tween(pop, 0.14, { GroupTransparency = 1, Position = UDim2.new(0, 0, 1, 10) })
                                 task.delay(0.16, function()
                                         if not dd._open then pop.Visible = false end
@@ -1292,17 +1249,24 @@ function Reborn:CreateWindow(config)
                                 Size = UDim2.new(1, 0, 0, GEO.OptH),
                                 BackgroundTransparency = 1,
                                 BackgroundColor3 = theme.OptionHover,
-                                Text = otext,
-                                Font = F.Medium,
-                                TextSize = 13,
-                                TextColor3 = theme.TextMuted,
-                                TextXAlignment = Enum.TextXAlignment.Left,
+                                Text = "",
                                 AutoButtonColor = false,
                                 LayoutOrder = i,
                                 Parent = pop,
                         })
                         corner(ob, 6)
-                        padding(ob, 0, 10, 0, 10)
+                        local ot = New("TextLabel", {
+                                Position = UDim2.new(0, 10, 0, 0),
+                                Size = UDim2.new(1, -44, 1, 0),
+                                BackgroundTransparency = 1,
+                                Font = F.Medium,
+                                TextSize = 13,
+                                TextColor3 = theme.TextMuted,
+                                TextXAlignment = Enum.TextXAlignment.Left,
+                                TextTruncate = Enum.TextTruncate.AtEnd,
+                                Text = otext,
+                                Parent = ob,
+                        })
                         local chk = iconCheck(ob)
                         chk.Container.AnchorPoint = Vector2.new(1, 0.5)
                         chk.Container.Position = UDim2.new(1, -10, 0.5, 0)
@@ -1311,30 +1275,32 @@ function Reborn:CreateWindow(config)
 
                         ob.MouseEnter:Connect(function()
                                 ob.BackgroundTransparency = 0
-                                ob.TextColor3 = theme.Text
+                                ot.TextColor3 = theme.Text
                         end)
                         ob.MouseLeave:Connect(function()
                                 ob.BackgroundTransparency = 1
-                                ob.TextColor3 = theme.TextMuted
+                                ot.TextColor3 = theme.TextMuted
                         end)
                         ob.Activated:Connect(function()
                                 dd.Value = otext
                                 val.Text = otext
+                                fit()
                                 for _, other in ipairs(optBtns) do
                                         local sel = other._text == otext
                                         for _, f in ipairs(other._chk.Frames) do f.Visible = sel end
-                                        other._btn.TextColor3 = sel and theme.Text or theme.TextMuted
+                                        other._txt.TextColor3 = sel and theme.Text or theme.TextMuted
                                 end
                                 setOpen(false)
                                 if cfg.Callback then cfg.Callback(otext) end
                         end)
-                        table.insert(optBtns, { _btn = ob, _chk = chk, _text = otext })
+                        table.insert(optBtns, { _btn = ob, _txt = ot, _chk = chk, _text = otext })
                         if otext == tostring(dd.Value) then
                                 val.Text = otext
-                                ob.TextColor3 = theme.Text
+                                ot.TextColor3 = theme.Text
                                 for _, f in ipairs(chk.Frames) do f.Visible = true end
                         end
                 end
+                fit()
 
                 local btn = overlayBtn(row)
                 btn.Activated:Connect(function()
@@ -1346,10 +1312,11 @@ function Reborn:CreateWindow(config)
                         local vtext = tostring(v)
                         dd.Value = vtext
                         val.Text = vtext
+                        fit()
                         for _, other in ipairs(optBtns) do
                                 local sel = other._text == vtext
                                 for _, f in ipairs(other._chk.Frames) do f.Visible = sel end
-                                other._btn.TextColor3 = sel and theme.Text or theme.TextMuted
+                                other._txt.TextColor3 = sel and theme.Text or theme.TextMuted
                         end
                         setOpen(false)
                         if fire and cfg.Callback then cfg.Callback(vtext) end
@@ -1357,7 +1324,6 @@ function Reborn:CreateWindow(config)
                 return dd
         end
 
-        -- ---------- Keybind ----------
         local function bindFromString(s)
                 if type(s) ~= "string" then return nil, nil end
                 for uit, name in pairs(MOUSE_NAMES) do
@@ -1374,13 +1340,12 @@ function Reborn:CreateWindow(config)
         local function addKeybind(section, cfg)
                 cfg = cfg or {}
                 local row = makeRow(section, GEO.RowH)
-                rowLabel(row, cfg.Text)
+                local lbl = rowLabel(row, cfg.Text, GEO.ChipMinW + 22)
 
                 local chip = New("TextButton", {
                         AnchorPoint = Vector2.new(1, 0.5),
                         Position = UDim2.new(1, -GEO.RowPad, 0.5, 0),
-                        Size = UDim2.new(0, 0, 0, GEO.ChipH),
-                        AutomaticSize = Enum.AutomaticSize.X,
+                        Size = UDim2.new(0, GEO.ChipMinW, 0, GEO.ChipH),
                         BackgroundColor3 = theme.Chip,
                         BorderSizePixel = 0,
                         Text = "",
@@ -1390,22 +1355,25 @@ function Reborn:CreateWindow(config)
                 })
                 corner(chip, 4)
                 local cs = stroke(chip, theme.LineStrong)
-                New("Frame", { -- min-width spacer (46px, like the concept)
-                        Size = UDim2.new(0, GEO.ChipMinW, 0, 1),
-                        BackgroundTransparency = 1,
-                        Parent = chip,
-                })
                 local txt = New("TextLabel", {
-                        Size = UDim2.new(0, 0, 1, 0),
-                        AutomaticSize = Enum.AutomaticSize.X,
+                        Size = UDim2.new(1, -16, 1, 0),
                         BackgroundTransparency = 1,
                         Font = F.Mono,
                         TextSize = 11,
                         TextColor3 = theme.TextMuted,
+                        TextXAlignment = Enum.TextXAlignment.Center,
+                        TextTruncate = Enum.TextTruncate.AtEnd,
                         Text = tostring(cfg.Value or "None"),
+                        ZIndex = 2,
                         Parent = chip,
                 })
-                padding(txt, 0, 9, 0, 9)
+                local function fitChip()
+                        local w = math.max(GEO.ChipMinW, txt.TextBounds.X + 18)
+                        chip.Size = UDim2.new(0, rnd(w), 0, GEO.ChipH)
+                        lbl.Size = UDim2.new(1, -(GEO.RowPad + 22 + w), 0, 16)
+                end
+                txt:GetPropertyChangedSignal("TextBounds"):Connect(fitChip)
+                task.defer(fitChip)
 
                 local kb = {
                         Name = cfg.Value or "None",
@@ -1469,7 +1437,7 @@ function Reborn:CreateWindow(config)
                 end)
 
                 table.insert(state.keybinds, kb)
-                kb.Chip = chip -- outside-click cancel needs the chip rect
+                kb.Chip = chip
                 registerSearch(row, cfg.Text, section)
 
                 function kb:Set(name)
@@ -1482,11 +1450,10 @@ function Reborn:CreateWindow(config)
                 return kb
         end
 
-        -- ---------- ColorPicker ----------
         local function addColorPicker(section, cfg)
                 cfg = cfg or {}
                 local row = makeRow(section, GEO.RowH)
-                rowLabel(row, cfg.Text)
+                rowLabel(row, cfg.Text, 108)
 
                 local trigger = New("TextButton", {
                         AnchorPoint = Vector2.new(1, 0.5),
@@ -1611,7 +1578,7 @@ function Reborn:CreateWindow(config)
                 corner(hdot, 6)
                 stroke(hdot, Color3.new(1, 1, 1), 0, 2)
 
-                New("TextLabel", { -- "HEX" caption
+                New("TextLabel", {
                         Position = UDim2.new(0, 0, 0, GEO.SVH + 9 + GEO.HueH + 9),
                         Size = UDim2.new(0, 0, 0, 14),
                         BackgroundTransparency = 1,
@@ -1681,7 +1648,10 @@ function Reborn:CreateWindow(config)
                                 local sz = el.AbsoluteSize
                                 local insetY = GuiService:GetGuiInset().Y
                                 local lx = input.Position.X - r.X
-                                local ly = input.Position.Y + insetY - r.Y
+                                local ly = input.Position.Y - r.Y
+                                if input.UserInputType == Enum.UserInputType.Touch then
+                                        ly = input.Position.Y + insetY - r.Y
+                                end
                                 if active.apply == "sv" then
                                         s = clamp(lx / sz.X, 0, 1)
                                         v = 1 - clamp(ly / sz.Y, 0, 1)
@@ -1703,14 +1673,15 @@ function Reborn:CreateWindow(config)
                 local function setOpen(o)
                         if open == o then return end
                         open = o
-                        row.ZIndex = o and 30 or 1
                         if o then
                                 closeAllPops(pop)
+                                liftRow(row, true)
                                 pop.Visible = true
                                 pop.Position = UDim2.new(1, -GEO.RowPad, 0, GEO.RowH + 10)
                                 tween(pop, 0.16, { GroupTransparency = 0, Position = UDim2.new(1, -GEO.RowPad, 0, GEO.RowH + 6) })
                                 registerPop(row, pop, setOpen)
                         else
+                                liftRow(row, false)
                                 tween(pop, 0.14, { GroupTransparency = 1, Position = UDim2.new(1, -GEO.RowPad, 0, GEO.RowH + 10) })
                                 task.delay(0.16, function()
                                         if not open then pop.Visible = false end
@@ -1732,17 +1703,16 @@ function Reborn:CreateWindow(config)
                 return cp
         end
 
-        -- ---------- Input ----------
         local function addInput(section, cfg)
                 cfg = cfg or {}
                 local row = makeRow(section, GEO.RowH)
-                rowLabel(row, cfg.Text)
+                rowLabel(row, cfg.Text, 202)
 
                 local box = New("TextBox", {
                         AnchorPoint = Vector2.new(1, 0.5),
                         Position = UDim2.new(1, -GEO.RowPad, 0.5, 0),
                         Size = UDim2.new(0, GEO.FieldW, 0, GEO.FieldH),
-                        BackgroundColor3 = theme.Field,
+                        BackgroundColor3 = theme.Overlay,
                         BorderSizePixel = 0,
                         Text = tostring(cfg.Value or ""),
                         PlaceholderText = tostring(cfg.Placeholder or ""),
@@ -1762,11 +1732,9 @@ function Reborn:CreateWindow(config)
 
                 box.Focused:Connect(function()
                         bs.Color = theme.Accent
-                        box.BackgroundColor3 = theme.Chip
                 end)
                 box.FocusLost:Connect(function(enter)
                         bs.Color = theme.LineStrong
-                        box.BackgroundColor3 = theme.Field
                         if cfg.Callback then cfg.Callback(box.Text, enter and true or false) end
                 end)
                 registerSearch(row, cfg.Text, section)
@@ -1783,7 +1751,6 @@ function Reborn:CreateWindow(config)
                 return inp
         end
 
-        -- ---------- Button ----------
         local function addButton(section, cfg)
                 cfg = cfg or {}
                 local btn = New("TextButton", {
@@ -1799,7 +1766,6 @@ function Reborn:CreateWindow(config)
                 corner(btn, 8)
                 local s
                 if cfg.Primary then
-                        btn.BackgroundColor3 = theme.Accent
                         btn.BackgroundColor3 = theme.Accent
                         btn.TextColor3 = Color3.new(1, 1, 1)
                         btn.MouseEnter:Connect(function()
@@ -1835,7 +1801,6 @@ function Reborn:CreateWindow(config)
                 return b
         end
 
-        -- ---------- Paragraph ----------
         local function addParagraph(section, cfg)
                 cfg = cfg or {}
                 local lbl = New("TextLabel", {
@@ -1860,9 +1825,6 @@ function Reborn:CreateWindow(config)
                 return p
         end
 
-        -- ============================================================
-        --  Sections / Tabs
-        -- ============================================================
         local function newSection(tab, name, badge)
                 local parent = tab.Page
                 if tab.Columns then
@@ -1877,7 +1839,6 @@ function Reborn:CreateWindow(config)
                         Parent = parent,
                 })
 
-                -- header: title + optional badge + flex line (measured, manual layout)
                 local head = New("Frame", {
                         Position = UDim2.new(0, 2, 0, 0),
                         Size = UDim2.new(1, -4, 0, 14),
@@ -2015,9 +1976,6 @@ function Reborn:CreateWindow(config)
                 end)
                 tab._setActive = setActive
 
-                -- two-column mode (Vercel dashboard grid): equal columns + 8px gutter.
-                -- Window W is even and (W - 200) is even, so each column is a whole
-                -- number of pixels — row borders stay on the pixel grid.
                 function tab:SetColumns(n)
                         if n ~= 2 then return end
                         if tab.Columns then return end
@@ -2035,8 +1993,6 @@ function Reborn:CreateWindow(config)
                                 list(col, GEO.SectionGap)
                                 tab.Columns[i] = col
                         end
-                        -- move existing sections into alternating columns
-                        -- snapshot first: reparenting mutates GetChildren order
                         local kids = {}
                         for _, child in ipairs(page:GetChildren()) do
                                 if child ~= tab.Columns[1] and child ~= tab.Columns[2] and child:IsA("GuiObject") and not child:IsA("UIListLayout") then
@@ -2065,16 +2021,12 @@ function Reborn:CreateWindow(config)
                 return tab
         end
 
-        -- ============================================================
-        --  Global input router (keybind capture, bound keys, outside click)
-        -- ============================================================
         local function inRect(el, m)
                 local p, sz = el.AbsolutePosition, el.AbsoluteSize
                 return m.X >= p.X - 1 and m.X <= p.X + sz.X + 1 and m.Y >= p.Y - 1 and m.Y <= p.Y + sz.Y + 1
         end
 
         connect(UserInputService.InputBegan, function(input, gameProcessed)
-                -- 1. keybind capture mode (keys; Escape cancels)
                 if state.listening and input.UserInputType == Enum.UserInputType.Keyboard then
                         if input.KeyCode == Enum.KeyCode.Escape then
                                 state.listening._cancel()
@@ -2083,7 +2035,6 @@ function Reborn:CreateWindow(config)
                         end
                         return
                 end
-                -- 2. bound keys fire
                 if not gameProcessed then
                         for _, kb in ipairs(state.keybinds) do
                                 local matched = false
@@ -2094,7 +2045,6 @@ function Reborn:CreateWindow(config)
                                 end
                         end
                 end
-                -- 3. outside click closes popovers / cancels listening
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                         local m
                         if input.UserInputType == Enum.UserInputType.Touch then
@@ -2119,7 +2069,6 @@ function Reborn:CreateWindow(config)
                                 end
                         end
                 end
-                -- 4. Escape closes open popovers
                 if input.KeyCode == Enum.KeyCode.Escape then
                         for i = #state.openPops, 1, -1 do
                                 state.openPops[i].close()
@@ -2127,9 +2076,6 @@ function Reborn:CreateWindow(config)
                 end
         end)
 
-        -- ============================================================
-        --  Public window API
-        -- ============================================================
         local Window = {
                 Title = tostring(config.Title or "Reborn"),
                 Theme = theme,

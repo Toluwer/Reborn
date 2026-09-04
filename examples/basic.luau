@@ -1,29 +1,11 @@
---[[
-	Reborn — example usage script
-	--------------------------------
-	Executor:
-	  loadstring(game:HttpGet("https://raw.githubusercontent.com/Toluwer/Reborn/main/examples/basic.luau"))()
-
-	Studio (Rojo): copy the body below into a LocalScript (the library is a
-	ModuleScript at ReplicatedStorage.Reborn):
-	  local Reborn = require(game:GetService("ReplicatedStorage"):WaitForChild("Reborn"))
-]]
-
 local Reborn = loadstring(game:HttpGet("https://raw.githubusercontent.com/Toluwer/Reborn/main/src/Reborn.luau"))()
 
--- ============================================================
---  Window
--- ============================================================
 local Window = Reborn:CreateWindow({
 	Title = "Reborn",
 	Size = Vector2.new(700, 530),
 	Profile = { Name = "guest_1337", Initial = "G" },
-	-- Theme = { Accent = Color3.fromRGB(0, 112, 243) }, -- optional overrides
 })
 
--- ============================================================
---  Main
--- ============================================================
 local Main = Window:Tab("Main")
 
 local Overview = Main:Section("Overview")
@@ -62,12 +44,9 @@ Core:Slider({
 	end,
 })
 
--- ============================================================
---  Combat
--- ============================================================
 local Combat = Window:Tab("Combat")
 
-local Aim = Combat:Section("Aim assist", "Beta") -- second argument = badge
+local Aim = Combat:Section("Aim assist", "Beta")
 Aim:Toggle({
 	Text = "Enabled",
 	Value = true,
@@ -88,7 +67,7 @@ Aim:Dropdown({
 })
 Aim:Keybind({
 	Text = "Aim key",
-	Value = "Right Mouse", -- accepts "Right Mouse" / "Left Shift" / "E" ...
+	Value = "Right Mouse",
 	Callback = function(name, input, gameProcessed)
 		if not gameProcessed then
 			print("[Reborn] aim key fired:", name)
@@ -111,11 +90,8 @@ Triggerbot:Slider({
 	Callback = function(v) print("[Reborn] fire delay:", v) end,
 })
 
--- ============================================================
---  Visuals — two-column layout (Tab:SetColumns(2))
--- ============================================================
 local Visuals = Window:Tab("Visuals")
-Visuals:SetColumns(2) -- sections now flow into two side-by-side columns
+Visuals:SetColumns(2)
 
 local ESP = Visuals:Section("ESP")
 ESP:Toggle({ Text = "Enable ESP", Value = true, Callback = function(v) end })
@@ -144,9 +120,6 @@ Environment:Slider({
 	Callback = function(v) print("[Reborn] brightness:", v) end,
 })
 
--- ============================================================
---  Settings
--- ============================================================
 local Settings = Window:Tab("Settings")
 
 local Interface = Settings:Section("Interface")
@@ -162,7 +135,7 @@ Interface:Keybind({
 	Value = "Right Shift",
 	Callback = function(name, input, gameProcessed)
 		if not gameProcessed then
-			Window:Toggle() -- hide / reopen the window
+			Window:Toggle()
 		end
 	end,
 })
@@ -197,11 +170,8 @@ Config:Button({
 	end,
 })
 
--- ============================================================
---  Programmatic API demo
--- ============================================================
 task.delay(2, function()
-	enableFeature:Set(true, true) -- Set(value, fireCallback)
+	enableFeature:Set(true, true)
 	Reborn:Notify({
 		Title = "Reborn loaded",
 		Description = "Programmatic API works: enableFeature:Set(true) fired its callback.",

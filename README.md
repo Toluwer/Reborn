@@ -1,6 +1,6 @@
 # Reborn
 
-Dark, minimalist UI library for Roblox — Vercel/Geist-inspired design language, ported pixel-for-pixel from an interactive HTML concept ([`concept/reborn-ui-concept.html`](concept/reborn-ui-concept.html)).
+Dark, minimalist UI library for Roblox — Vercel/Geist-inspired design language, implemented natively in Luau.
 
 - **Pure black surfaces** (`#000000`), 1px hairline borders (`#262626` / `#333`)
 - **One accent**: `#0070f3` (Vercel blue)
@@ -10,7 +10,7 @@ Dark, minimalist UI library for Roblox — Vercel/Geist-inspired design language
 - **Single file** — works with `loadstring()` and `require()`
 
 ![components](https://img.shields.io/badge/components-toggle%20%7C%20slider%20%7C%20dropdown%20%7C%20keybind%20%7C%20color--picker%20%7C%20input%20%7C%20button-0a0a0a)
-![status](https://img.shields.io/badge/status-v0.1.0-0070f3)
+![status](https://img.shields.io/badge/status-v0.1.1-0070f3)
 
 ---
 
@@ -135,7 +135,7 @@ Reborn:CreateWindow({
 })
 ```
 
-Default values (each maps to the concept's CSS variables):
+Default values:
 
 | Key | Value | Key | Value |
 | --- | --- | --- | --- |
@@ -153,9 +153,9 @@ Default values (each maps to the concept's CSS variables):
 
 ## Design notes
 
-- **Pixel discipline**: the window is `round(down, min(700, 96vw), 2)` × `round(down, min(530, 88vh), 2)` — always even. All row heights, control sizes and paddings are integers; two-column widths are `(contentWidth - 8) / 2`, which stays whole because the geometry is kept even. Hairlines + small radii therefore rasterize without jaggies. Keep this invariant if you fork.
+- **Pixel discipline**: the window is clamped to 96% of the viewport width and 88% of its height, then floored to an even pixel count. All row heights, control sizes and paddings are integers; two-column widths are `(contentWidth - 8) / 2`, which stays whole because the geometry is kept even. Hairlines + small radii therefore rasterize without jaggies. Keep this invariant if you fork.
 - **White is only control geometry** (toggle knob, slider handle) — accent color is always blue.
-- The HTML concept in `concept/` is the living design reference: every CSS variable maps to a `Theme` key, every row is a `Frame + UICorner + UIStroke`, and the sidebar is a vertical list layout.
+- **Single-file, zero dependencies**: `src/Reborn.luau` is the whole library — every component is built from plain `Frame` / `TextLabel` / `TextButton` instances plus `UICorner`, `UIStroke` and `UIGradient`. No assets, no external fonts, no Rojo required (but a Rojo project is included for Studio users).
 
 ## Roadmap
 
