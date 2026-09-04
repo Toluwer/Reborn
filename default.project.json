@@ -1,0 +1,11 @@
+{
+  "name": "Reborn",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Reborn": {
+        "$path": "src/Reborn.luau"
+      }
+    }
+  }
+}
