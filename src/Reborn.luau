@@ -5,7 +5,7 @@ local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.4.1",
+        Version = "0.5.0",
         NotificationsEnabled = true,
         _windows = {},
 }
@@ -170,118 +170,160 @@ local MOUSE_NAMES = {
         [Enum.UserInputType.MouseButton3] = "Middle Mouse",
 }
 
-local function iconBars(parent, bars)
-        local frames = {}
-        for _, b in ipairs(bars) do
-                local f = New("Frame", {
-                        Position = UDim2.new(0, b.x, 0, b.y),
-                        Size = UDim2.new(0, b.w, 0, b.h),
-                        Rotation = b.rot or 0,
-                        BackgroundColor3 = Color3.new(1, 1, 1),
-                        BorderSizePixel = 0,
-                        Parent = parent,
-                })
-                table.insert(frames, f)
-        end
-        local icon = { Frames = frames }
-        function icon.SetColor(color)
-                for _, f in ipairs(frames) do f.BackgroundColor3 = color end
-        end
-        function icon.SetTransparency(t)
-                for _, f in ipairs(frames) do f.BackgroundTransparency = t end
-        end
-        return icon
-end
+local ICONS = {
+        activity = { 16898612629, 514, 771 },
+        antenna = { 16898612629, 869, 563 },
+        ["at-sign"] = { 16898612629, 453, 869 },
+        battery = { 16898612629, 967, 857 },
+        bell = { 16898612819, 820, 257 },
+        bluetooth = { 16898612819, 771, 355 },
+        bomb = { 16898612819, 257, 869 },
+        bookmark = { 16898612819, 514, 918 },
+        braces = { 16898612819, 147, 820 },
+        bug = { 16898612819, 257, 967 },
+        camera = { 16898612819, 967, 563 },
+        check = { 16898612819, 710, 869 },
+        ["chevron-down"] = { 16898612819, 196, 918 },
+        ["chevron-left"] = { 16898612819, 404, 967 },
+        ["chevron-right"] = { 16898612819, 869, 759 },
+        ["chevron-up"] = { 16898612819, 710, 918 },
+        ["circle-alert"] = { 16898612819, 918, 808 },
+        ["circle-check"] = { 16898612819, 869, 955 },
+        ["circle-help"] = { 16898613044, 820, 257 },
+        ["circle-x"] = { 16898613044, 820, 306 },
+        clock = { 16898613044, 771, 661 },
+        cloud = { 16898613044, 918, 306 },
+        code = { 16898613044, 355, 869 },
+        coins = { 16898613044, 869, 612 },
+        compass = { 16898613044, 514, 967 },
+        copy = { 16898613044, 918, 612 },
+        cpu = { 16898613044, 196, 869 },
+        crosshair = { 16898613044, 453, 869 },
+        crown = { 16898613044, 404, 918 },
+        database = { 16898613044, 710, 869 },
+        ["dollar-sign"] = { 16898613044, 820, 857 },
+        download = { 16898613044, 820, 906 },
+        expand = { 16898613353, 306, 771 },
+        eye = { 16898613353, 771, 563 },
+        ["eye-off"] = { 16898613353, 820, 514 },
+        ["file-code"] = { 16898613353, 869, 49 },
+        filter = { 16898613353, 612, 869 },
+        flame = { 16898613353, 967, 306 },
+        focus = { 16898613353, 771, 759 },
+        folder = { 16898613353, 404, 967 },
+        ["gamepad-2"] = { 16898613353, 710, 967 },
+        gauge = { 16898613353, 771, 955 },
+        gem = { 16898613353, 918, 857 },
+        ghost = { 16898613353, 869, 906 },
+        globe = { 16898613509, 771, 563 },
+        ["grid-2x2"] = { 16898613509, 771, 98 },
+        grip = { 16898613509, 869, 257 },
+        ["grip-vertical"] = { 16898613509, 0, 869 },
+        hammer = { 16898613509, 306, 820 },
+        hand = { 16898613509, 563, 820 },
+        hash = { 16898613509, 147, 771 },
+        heart = { 16898613509, 661, 771 },
+        home = { 16898613509, 820, 147 },
+        info = { 16898613509, 612, 869 },
+        joystick = { 16898613509, 196, 820 },
+        key = { 16898613509, 869, 404 },
+        keyboard = { 16898613509, 453, 820 },
+        layers = { 16898613509, 98, 967 },
+        ["layout-grid"] = { 16898613509, 918, 404 },
+        lightbulb = { 16898613509, 918, 196 },
+        list = { 16898613509, 869, 808 },
+        ["loader-circle"] = { 16898613509, 771, 906 },
+        ["locate-fixed"] = { 16898613509, 967, 759 },
+        lock = { 16898613509, 918, 857 },
+        ["log-out"] = { 16898613509, 820, 955 },
+        map = { 16898613613, 306, 771 },
+        maximize = { 16898613613, 771, 563 },
+        ["message-circle"] = { 16898613613, 563, 820 },
+        minimize = { 16898613613, 918, 49 },
+        minus = { 16898613613, 771, 196 },
+        moon = { 16898613613, 306, 918 },
+        ["mouse-pointer-2"] = { 16898613613, 820, 661 },
+        move = { 16898613613, 453, 820 },
+        music = { 16898613613, 967, 563 },
+        package = { 16898613613, 918, 196 },
+        palette = { 16898613613, 453, 918 },
+        ["panel-left"] = { 16898613613, 967, 453 },
+        play = { 16898613699, 918, 257 },
+        plus = { 16898613699, 257, 918 },
+        pointer = { 16898613699, 661, 771 },
+        power = { 16898613699, 820, 147 },
+        puzzle = { 16898613699, 49, 918 },
+        radar = { 16898613699, 820, 404 },
+        radio = { 16898613699, 306, 918 },
+        ["refresh-cw"] = { 16898613699, 404, 869 },
+        ["rotate-ccw"] = { 16898613699, 967, 355 },
+        ["rotate-cw"] = { 16898613699, 869, 453 },
+        scan = { 16898613699, 967, 196 },
+        search = { 16898613699, 918, 857 },
+        server = { 16898613777, 771, 0 },
+        settings = { 16898613777, 771, 257 },
+        shield = { 16898613777, 869, 0 },
+        ["shield-check"] = { 16898613777, 820, 257 },
+        ["shield-half"] = { 16898613777, 306, 771 },
+        shrink = { 16898613777, 355, 771 },
+        skull = { 16898613777, 49, 869 },
+        ["sliders-horizontal"] = { 16898613777, 820, 355 },
+        sparkles = { 16898613777, 918, 49 },
+        ["square-check"] = { 16898613777, 563, 918 },
+        star = { 16898613777, 967, 147 },
+        sun = { 16898613777, 967, 453 },
+        sword = { 16898613777, 710, 967 },
+        swords = { 16898613777, 967, 759 },
+        target = { 16898613869, 514, 771 },
+        terminal = { 16898613869, 820, 257 },
+        timer = { 16898613869, 918, 0 },
+        ["toggle-left"] = { 16898613869, 869, 49 },
+        ["trash-2"] = { 16898613869, 257, 918 },
+        ["triangle-alert"] = { 16898613869, 967, 0 },
+        upload = { 16898613869, 612, 869 },
+        user = { 16898613869, 661, 869 },
+        users = { 16898613869, 967, 98 },
+        ["volume-2"] = { 16898613869, 771, 808 },
+        wand = { 16898613869, 404, 967 },
+        ["wand-sparkles"] = { 16898613869, 453, 918 },
+        wifi = { 16898613869, 869, 808 },
+        ["wifi-off"] = { 16898613869, 918, 759 },
+        wrench = { 16898613869, 820, 906 },
+        x = { 16898613869, 869, 906 },
+        zap = { 16898613869, 918, 906 },
+        ["zoom-in"] = { 16898613869, 869, 955 },
+        ["zoom-out"] = { 16898613869, 967, 906 },
+}
 
-local function iconChevron(parent)
-        local c = New("Frame", {
-                Size = UDim2.new(0, 18, 0, 18),
+local function icon(parent, name, size, color)
+        local d = ICONS[name]
+        if d == nil then return nil end
+        return New("ImageLabel", {
                 BackgroundTransparency = 1,
+                Size = UDim2.new(0, size, 0, size),
+                Image = "rbxassetid://" .. string.format("%.0f", d[1]),
+                ImageRectSize = Vector2.new(48, 48),
+                ImageRectOffset = Vector2.new(d[2], d[3]),
+                ImageColor3 = color or Color3.new(1, 1, 1),
+                BorderSizePixel = 0,
                 Parent = parent,
         })
-        local icon = iconBars(c, {
-                { x = 2, y = 8, w = 8, h = 2, rot = 45 },
-                { x = 8, y = 8, w = 8, h = 2, rot = -45 },
-        })
-        icon.Container = c
-        return icon
 end
 
-local function iconMinus(parent)
-        local c = New("Frame", { Size = UDim2.new(0, 18, 0, 18), BackgroundTransparency = 1, Parent = parent })
-        local icon = iconBars(c, { { x = 1, y = 8, w = 16, h = 2 } })
-        icon.Container = c
-        return icon
-end
-
-local function iconPlus(parent)
-        local c = New("Frame", { Size = UDim2.new(0, 18, 0, 18), BackgroundTransparency = 1, Parent = parent })
-        local icon = iconBars(c, {
-                { x = 1, y = 8, w = 16, h = 2 },
-                { x = 8, y = 1, w = 2, h = 16 },
-        })
-        icon.Container = c
-        return icon
-end
-
-local function iconClose(parent)
-        local c = New("Frame", { Size = UDim2.new(0, 18, 0, 18), BackgroundTransparency = 1, Parent = parent })
-        local icon = iconBars(c, {
-                { x = 1, y = 8, w = 16, h = 2, rot = 45 },
-                { x = 1, y = 8, w = 16, h = 2, rot = -45 },
-        })
-        icon.Container = c
-        return icon
-end
-
-local function iconSearch(parent)
-        local c = New("Frame", { Size = UDim2.new(0, 18, 0, 18), BackgroundTransparency = 1, Parent = parent })
-        local ring = New("Frame", {
-                Position = UDim2.new(0, 2, 0, 2),
-                Size = UDim2.new(0, 12, 0, 12),
-                BackgroundTransparency = 1,
-                BorderSizePixel = 0,
-                Parent = c,
-        })
-        corner(ring, 6)
-        local ringStroke = stroke(ring, Color3.new(1, 1, 1), 0, 2)
-        local bars = iconBars(c, { { x = 11, y = 13, w = 6, h = 2, rot = 45 } })
-        local icon = { Frames = bars.Frames, _ringStroke = ringStroke, Container = c }
-        function icon.SetColor(color)
-                bars.SetColor(color)
-                ringStroke.Color = color
-        end
-        function icon.SetTransparency(t)
-                bars.SetTransparency(t)
-                ringStroke.Transparency = t
-        end
-        return icon
-end
-
-local function iconCheck(parent)
-        local c = New("Frame", { Size = UDim2.new(0, 12, 0, 12), BackgroundTransparency = 1, Parent = parent })
-        local icon = iconBars(c, {
-                { x = 0, y = 7, w = 6, h = 2, rot = 45 },
-                { x = 3, y = 5, w = 9, h = 2, rot = -45 },
-        })
-        icon.Container = c
-        return icon
-end
-
-local function glyphInfo(parent)
-        return iconBars(parent, { { x = 6, y = 1, w = 2, h = 2 }, { x = 6, y = 5, w = 2, h = 8 } })
-end
-
-local function glyphWarn(parent)
-        return iconBars(parent, { { x = 6, y = 2, w = 2, h = 8 }, { x = 6, y = 11, w = 2, h = 2 } })
-end
-
-local function glyphCheck(parent)
-        return iconBars(parent, {
-                { x = 2, y = 7, w = 7, h = 2, rot = 45 },
-                { x = 4, y = 5, w = 10, h = 2, rot = -45 },
-        })
-end
+task.spawn(function()
+        pcall(function()
+                local cp = game:GetService("ContentProvider")
+                local seen, list = {}, {}
+                for _, d in pairs(ICONS) do
+                        local u = "rbxassetid://" .. string.format("%.0f", d[1])
+                        if not seen[u] then
+                                seen[u] = true
+                                table.insert(list, u)
+                        end
+                end
+                cp:PreloadAsync(list)
+        end)
+end)
 
 local function resolveParent(config)
         if config and config.Parent then return config.Parent, false end
@@ -334,9 +376,9 @@ local function clearOld(parent)
 end
 
 local TOAST_TYPES = {
-        info    = { color = DEFAULT_THEME.Accent,  glyph = glyphInfo },
-        success = { color = DEFAULT_THEME.Success, glyph = glyphCheck },
-        error   = { color = DEFAULT_THEME.Error,   glyph = glyphWarn },
+        info    = { color = DEFAULT_THEME.Accent,  name = "info" },
+        success = { color = DEFAULT_THEME.Success, name = "circle-check" },
+        error   = { color = DEFAULT_THEME.Error,   name = "circle-x" },
 }
 
 local function buildToastLayer(gui, theme)
@@ -395,15 +437,8 @@ local function buildToastLayer(gui, theme)
                 stroke(toast, theme.LineStrong)
                 padding(toast, 11, 12, 11, 12)
 
-                local ic = New("Frame", {
-                        Position = UDim2.new(0, 0, 0, 1),
-                        Size = UDim2.new(0, 15, 0, 15),
-                        BackgroundColor3 = kind.color,
-                        BorderSizePixel = 0,
-                        Parent = toast,
-                })
-                corner(ic, 8)
-                kind.glyph(ic).SetColor(Color3.new(1, 1, 1))
+                local ic = icon(toast, kind.name, 16, kind.color)
+                ic.Position = UDim2.new(0, 0, 0, 0)
 
                 local title = New("TextLabel", {
                         Position = UDim2.new(0, 27, 0, 0),
@@ -615,7 +650,8 @@ function Reborn:CreateWindow(config)
                 Parent = header,
         })
         New("TextLabel", {
-                Position = UDim2.new(0, 0, 0, 15),
+                AnchorPoint = Vector2.new(0, 0.5),
+                Position = UDim2.new(0, 0, 0.5, 0),
                 Size = UDim2.new(0, 0, 0, 16),
                 AutomaticSize = Enum.AutomaticSize.X,
                 BackgroundTransparency = 1,
@@ -635,7 +671,7 @@ function Reborn:CreateWindow(config)
                 Parent = header,
         })
 
-        local function captionBtn(x, buildIcon, isClose)
+        local function captionBtn(x, iconName, isClose)
                 local b = New("TextButton", {
                         Position = UDim2.new(0, x, 0, 5),
                         Size = UDim2.new(0, GEO.WinBtn, 0, GEO.WinBtnH),
@@ -645,25 +681,24 @@ function Reborn:CreateWindow(config)
                         Parent = cluster,
                 })
                 corner(b, 6)
-                local icon = buildIcon(b)
-                icon.Container.Position = UDim2.new(0.5, -9, 0.5, -9)
-                icon.SetColor(theme.TextFaint)
+                local ic = icon(b, iconName, 18, theme.TextFaint)
+                ic.Position = UDim2.new(0.5, -9, 0.5, -9)
                 b.MouseEnter:Connect(function()
                         b.BackgroundTransparency = 0
                         if isClose then
                                 b.BackgroundColor3 = theme.Error
                                 b.BackgroundTransparency = 0.88
-                                icon.SetColor(theme.Error)
+                                ic.ImageColor3 = theme.Error
                         else
                                 b.BackgroundColor3 = theme.RowHover
-                                icon.SetColor(theme.Text)
+                                ic.ImageColor3 = theme.Text
                         end
                 end)
                 b.MouseLeave:Connect(function()
                         b.BackgroundTransparency = 1
-                        icon.SetColor(theme.TextFaint)
+                        ic.ImageColor3 = theme.TextFaint
                 end)
-                return b, icon
+                return b, ic
         end
 
         local searchBox = New("TextBox", {
@@ -697,23 +732,21 @@ function Reborn:CreateWindow(config)
                 Parent = cluster,
         })
         corner(searchBtn, 6)
-        local searchIcon = iconSearch(searchBtn)
-        searchIcon.Container.Position = UDim2.new(0.5, -9, 0.5, -9)
-        searchIcon.SetColor(theme.TextFaint)
+        local searchIcon = icon(searchBtn, "search", 18, theme.TextFaint)
+        searchIcon.Position = UDim2.new(0.5, -9, 0.5, -9)
         searchBtn.MouseEnter:Connect(function()
                 searchBtn.BackgroundTransparency = 0
-                searchIcon.SetColor(theme.Text)
+                searchIcon.ImageColor3 = theme.Text
         end)
         searchBtn.MouseLeave:Connect(function()
                 searchBtn.BackgroundTransparency = 1
-                searchIcon.SetColor(theme.TextFaint)
+                searchIcon.ImageColor3 = theme.TextFaint
         end)
-        local minBtn, minIcon = captionBtn(GEO.SearchW + 9 + 28 + 9, iconMinus, false)
-        local plusIcon = iconPlus(minBtn)
-        plusIcon.Container.Position = UDim2.new(0.5, -9, 0.5, -9)
-        plusIcon.SetColor(theme.TextFaint)
-        for _, f in ipairs(plusIcon.Frames) do f.Visible = false end
-        local closeBtn = captionBtn(GEO.SearchW + 9 + 28 + 9 + GEO.WinBtn + 9, iconClose, true)
+        local minBtn, minIcon = captionBtn(GEO.SearchW + 9 + 28 + 9, "minus", false)
+        local plusIcon = icon(minBtn, "plus", 18, theme.TextFaint)
+        plusIcon.Position = UDim2.new(0.5, -9, 0.5, -9)
+        plusIcon.Visible = false
+        local closeBtn = captionBtn(GEO.SearchW + 9 + 28 + 9 + GEO.WinBtn + 9, "x", true)
 
         local bodyGroup = New("Frame", {
                 Position = UDim2.new(0, 0, 0, GEO.Header),
@@ -823,18 +856,13 @@ function Reborn:CreateWindow(config)
                 ZIndex = 25,
                 Parent = windowFrame,
         })
-        local gripIcon = iconBars(grip, {
-                { x = 14, y = 2, w = 2, h = 2 },
-                { x = 10, y = 6, w = 2, h = 2 },
-                { x = 6, y = 10, w = 2, h = 2 },
-                { x = 2, y = 14, w = 2, h = 2 },
-        })
-        gripIcon.SetColor(theme.TextFaint)
+        local gripIcon = icon(grip, "grip", 14, theme.TextFaint)
+        gripIcon.Position = UDim2.new(0.5, -7, 0.5, -7)
         grip.MouseEnter:Connect(function()
-                gripIcon.SetColor(theme.Text)
+                gripIcon.ImageColor3 = theme.Text
         end)
         grip.MouseLeave:Connect(function()
-                gripIcon.SetColor(theme.TextFaint)
+                gripIcon.ImageColor3 = theme.TextFaint
         end)
         local resizeState = nil
         grip.InputBegan:Connect(function(input)
@@ -862,8 +890,8 @@ function Reborn:CreateWindow(config)
                 state.min = m
                 grip.Visible = not m
                 if m then closeAllPops() end
-                for _, f in ipairs(minIcon.Frames) do f.Visible = not m end
-                for _, f in ipairs(plusIcon.Frames) do f.Visible = m end
+                minIcon.Visible = not m
+                plusIcon.Visible = m
                 if m then
                         tween(windowFrame, 0.26, { Size = UDim2.new(0, W, 0, GEO.Header) }, Enum.EasingStyle.Quint)
                 else
@@ -1109,7 +1137,7 @@ function Reborn:CreateWindow(config)
                         })
                         local cancelB = New("TextButton", {
                                 Position = UDim2.new(0, 24, 0, 100),
-                                Size = UDim2.new(0.5, -14, 0, 36),
+                                Size = UDim2.new(0.5, -29, 0, 36),
                                 BackgroundTransparency = 1,
                                 BackgroundColor3 = theme.RowHover,
                                 Text = "Cancel",
@@ -1123,8 +1151,8 @@ function Reborn:CreateWindow(config)
                         corner(cancelB, 6)
                         local cbs = stroke(cancelB, theme.Line)
                         local closeB = New("TextButton", {
-                                Position = UDim2.new(0.5, 10, 0, 100),
-                                Size = UDim2.new(0.5, -14, 0, 36),
+                                Position = UDim2.new(0.5, 5, 0, 100),
+                                Size = UDim2.new(0.5, -29, 0, 36),
                                 BackgroundColor3 = theme.Error,
                                 Text = "Close",
                                 Font = F.Semibold,
@@ -1252,7 +1280,7 @@ function Reborn:CreateWindow(config)
                         Parent = row,
                 })
                 New("TextLabel", {
-                        Size = UDim2.new(1, -70, 1, 0),
+                        Size = UDim2.new(1, -80, 1, 0),
                         BackgroundTransparency = 1,
                         Font = F.Medium,
                         TextSize = 13,
@@ -1373,10 +1401,9 @@ function Reborn:CreateWindow(config)
                 local row = makeRow(section, GEO.RowH)
                 local lbl = rowLabel(row, cfg.Text, 118)
 
-                local chev = iconChevron(row)
-                chev.Container.AnchorPoint = Vector2.new(1, 0.5)
-                chev.Container.Position = UDim2.new(1, -GEO.RowPad, 0.5, 0)
-                chev.SetColor(theme.TextFaint)
+                local chev = icon(row, "chevron-down", 18, theme.TextFaint)
+                chev.AnchorPoint = Vector2.new(1, 0.5)
+                chev.Position = UDim2.new(1, -GEO.RowPad, 0.5, 0)
 
                 local val = New("TextLabel", {
                         AnchorPoint = Vector2.new(1, 0.5),
@@ -1387,6 +1414,7 @@ function Reborn:CreateWindow(config)
                         TextSize = 13,
                         TextColor3 = theme.TextMuted,
                         TextXAlignment = Enum.TextXAlignment.Right,
+                        TextTruncate = Enum.TextTruncate.AtEnd,
                         Text = "",
                         ZIndex = 5,
                         Parent = row,
@@ -1436,14 +1464,14 @@ function Reborn:CreateWindow(config)
                                 pop.Visible = true
                                 pop.Position = UDim2.new(0, x, 0, y + 4)
                                 tween(pop, 0.16, { Position = UDim2.new(0, x, 0, y) })
-                                tween(chev.Container, 0.18, { Rotation = 180 })
+                                tween(chev, 0.18, { Rotation = 180 })
                                 registerPop(row, pop, setOpen)
                         else
                                 tween(pop, 0.14, { Position = UDim2.new(0, pop.Position.X.Offset, 0, pop.Position.Y.Offset + 4) })
                                 task.delay(0.16, function()
                                         if not dd._open then pop.Visible = false end
                                 end)
-                                tween(chev.Container, 0.18, { Rotation = 0 })
+                                tween(chev, 0.18, { Rotation = 0 })
                                 unregisterPop(pop)
                         end
                 end
@@ -1472,11 +1500,10 @@ function Reborn:CreateWindow(config)
                                 Text = otext,
                                 Parent = ob,
                         })
-                        local chk = iconCheck(ob)
-                        chk.Container.AnchorPoint = Vector2.new(1, 0.5)
-                        chk.Container.Position = UDim2.new(1, -10, 0.5, 0)
-                        chk.SetColor(theme.Accent)
-                        for _, f in ipairs(chk.Frames) do f.Visible = false end
+                        local chk = icon(ob, "check", 16, theme.Accent)
+                        chk.AnchorPoint = Vector2.new(1, 0.5)
+                        chk.Position = UDim2.new(1, -10, 0.5, 0)
+                        chk.Visible = false
 
                         ob.MouseEnter:Connect(function()
                                 ob.BackgroundTransparency = 0
@@ -1492,7 +1519,7 @@ function Reborn:CreateWindow(config)
                                 fit()
                                 for _, other in ipairs(optBtns) do
                                         local sel = other._text == otext
-                                        for _, f in ipairs(other._chk.Frames) do f.Visible = sel end
+                                        other._chk.Visible = sel
                                         other._txt.TextColor3 = sel and theme.Text or theme.TextMuted
                                 end
                                 setOpen(false)
@@ -1502,7 +1529,7 @@ function Reborn:CreateWindow(config)
                         if otext == tostring(dd.Value) then
                                 val.Text = otext
                                 ot.TextColor3 = theme.Text
-                                for _, f in ipairs(chk.Frames) do f.Visible = true end
+                                chk.Visible = true
                         end
                 end
                 fit()
@@ -1520,7 +1547,7 @@ function Reborn:CreateWindow(config)
                         fit()
                         for _, other in ipairs(optBtns) do
                                 local sel = other._text == vtext
-                                for _, f in ipairs(other._chk.Frames) do f.Visible = sel end
+                                other._chk.Visible = sel
                                 other._txt.TextColor3 = sel and theme.Text or theme.TextMuted
                         end
                         setOpen(false)
@@ -2019,7 +2046,7 @@ function Reborn:CreateWindow(config)
                         Text = tostring(cfg.Text or ""),
                         Parent = section.Rows,
                 })
-                padding(lbl, 2, 2, 2, 2)
+                padding(lbl, 2, 2, 2, 12)
                 registerSearch(lbl, cfg.Text, section)
                 local p = { Label = lbl }
                 function p:Set(text)
@@ -2116,7 +2143,7 @@ function Reborn:CreateWindow(config)
                 return section
         end
 
-        local function addTab(name)
+        local function addTab(name, iconName)
                 local btn = New("TextButton", {
                         Size = UDim2.new(1, 0, 0, GEO.TabH),
                         BackgroundTransparency = 1,
@@ -2130,7 +2157,16 @@ function Reborn:CreateWindow(config)
                         Parent = tabsHolder,
                 })
                 corner(btn, 8)
-                padding(btn, 0, 12, 0, 12)
+                local ic
+                if iconName and ICONS[iconName] then
+                        ic = icon(btn, iconName, 16, theme.TextMuted)
+                        ic.AnchorPoint = Vector2.new(0, 0.5)
+                        ic.Position = UDim2.new(0, -26, 0.5, 0)
+                        ic.ZIndex = 2
+                        padding(btn, 0, 12, 0, 38)
+                else
+                        padding(btn, 0, 12, 0, 12)
+                end
 
                 local page = New("Frame", {
                         Size = UDim2.new(1, 0, 0, 0),
@@ -2155,17 +2191,20 @@ function Reborn:CreateWindow(config)
                         btn.BackgroundTransparency = active and 0 or 1
                         btn.TextColor3 = active and theme.Text or theme.TextMuted
                         btn.Font = active and F.Semibold or F.Medium
+                        if ic then ic.ImageColor3 = active and theme.Text or theme.TextMuted end
                 end
                 btn.MouseEnter:Connect(function()
                         if not page.Visible then
                                 btn.BackgroundTransparency = 0
                                 btn.TextColor3 = theme.Text
+                                if ic then ic.ImageColor3 = theme.Text end
                         end
                 end)
                 btn.MouseLeave:Connect(function()
                         if not page.Visible then
                                 btn.BackgroundTransparency = 1
                                 btn.TextColor3 = theme.TextMuted
+                                if ic then ic.ImageColor3 = theme.TextMuted end
                         end
                 end)
                 btn.Activated:Connect(function()
@@ -2288,8 +2327,8 @@ function Reborn:CreateWindow(config)
                 Gui = gui,
         }
 
-        function Window:Tab(name)
-                return addTab(name)
+        function Window:Tab(name, iconName)
+                return addTab(name, iconName)
         end
 
         function Window:Notify(a, b)

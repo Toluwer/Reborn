@@ -2,17 +2,18 @@
 
 A dark, minimalist UI library for Roblox, implemented in a single Luau module.
 
-![version](https://img.shields.io/badge/version-v0.4.2-0070f3)
+![version](https://img.shields.io/badge/version-v0.5.0-0070f3)
 
 ## Features
 
 - Draggable, resizable window with minimize and viewport snapping
-- Sidebar tabs with one- and two-column layouts
+- Sidebar tabs with optional icons and one- or two-column layouts
 - Toggles, sliders, dropdowns, keybinds, color pickers, text inputs, buttons, paragraphs
 - Toast notifications
 - Configurable theme
+- 120+ Lucide icons built in, preloaded on startup
 - Randomized instance names, hidden parenting (`gethui` / `protect_gui`), no console output
-- Zero dependencies — plain instances only, no assets or external fonts
+- Zero runtime dependencies — one file, plain instances
 
 ## Installation
 
@@ -51,7 +52,7 @@ local Window = Reborn:CreateWindow({
     Size = Vector2.new(700, 530),
 })
 
-local Main = Window:Tab("Main")
+local Main = Window:Tab("Main", "home")
 local Section = Main:Section("Overview")
 
 Section:Paragraph("Hello from Reborn.")
@@ -63,7 +64,7 @@ Section:Button({
     end,
 })
 
-local Visuals = Window:Tab("Visuals")
+local Visuals = Window:Tab("Visuals", "eye")
 Visuals:SetColumns(2)
 Visuals:Section("ESP")
 Visuals:Section("Environment")
@@ -87,7 +88,7 @@ A full example is available at [`examples/basic.luau`](examples/basic.luau).
 
 | Method | Description |
 | --- | --- |
-| `Window:Tab(name) -> Tab` | Adds a sidebar tab. The first tab is active by default. |
+| `Window:Tab(name, icon?) -> Tab` | Adds a sidebar tab with an optional icon name (see Icons below). The first tab is active by default. |
 | `Window:Notify(config)` | Same as `Reborn:Notify`. |
 | `Window:Search(query)` | Filters rows by text. `""` clears the filter. |
 | `Window:SetTitle(text)` | Updates the header title. |
@@ -101,6 +102,17 @@ A full example is available at [`examples/basic.luau`](examples/basic.luau).
 | --- | --- |
 | `Tab:Section(name, badge?) -> Section` | Adds a section. `badge` renders a small chip next to the title. |
 | `Tab:SetColumns(2)` | Switches the page to a two-column layout. Existing sections are redistributed. |
+
+### Icons
+
+Tab icons and all built-in glyphs come from the [Lucide](https://lucide.dev) icon set, embedded as Roblox-hosted sprite assets:
+
+```lua
+Window:Tab("Combat", "crosshair")
+Window:Tab("Visuals", "eye")
+```
+
+A selection of available names: `home`, `crosshair`, `eye`, `settings`, `swords`, `shield`, `target`, `zap`, `star`, `flame`, `skull`, `ghost`, `bomb`, `palette`, `sparkles`, `moon`, `sun`, `cpu`, `wifi`, `lock`, `key`, `terminal`, `radar`, `gamepad-2`, `joystick`, `users`, `heart`, `gem`, `crown`. Any unknown name is ignored and the tab renders without an icon.
 
 ### Section
 
@@ -153,3 +165,5 @@ Reborn:CreateWindow({
 ## License
 
 [MIT](LICENSE)
+
+Icons are from [Lucide](https://lucide.dev) (ISC License), rendered via the [lucide-roblox](https://github.com/latte-soft/lucide-roblox) sprite assets.

@@ -5,7 +5,7 @@ local Window = Reborn:CreateWindow({
         Size = Vector2.new(700, 530),
 })
 
-local Main = Window:Tab("Main")
+local Main = Window:Tab("Main", "home")
 
 local Overview = Main:Section("Overview")
 Overview:Paragraph(
@@ -43,7 +43,7 @@ Core:Slider({
         end,
 })
 
-local Combat = Window:Tab("Combat")
+local Combat = Window:Tab("Combat", "crosshair")
 
 local Aim = Combat:Section("Aim assist", "Beta")
 Aim:Toggle({
@@ -89,7 +89,7 @@ Triggerbot:Slider({
         Callback = function(v) print("[Reborn] fire delay:", v) end,
 })
 
-local Visuals = Window:Tab("Visuals")
+local Visuals = Window:Tab("Visuals", "eye")
 Visuals:SetColumns(2)
 
 local ESP = Visuals:Section("ESP")
@@ -119,7 +119,7 @@ Environment:Slider({
         Callback = function(v) print("[Reborn] brightness:", v) end,
 })
 
-local Settings = Window:Tab("Settings")
+local Settings = Window:Tab("Settings", "settings")
 
 local Interface = Settings:Section("Interface")
 Interface:Toggle({
