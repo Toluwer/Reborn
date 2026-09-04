@@ -5,7 +5,7 @@ local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.2.0",
+        Version = "0.3.0",
         NotificationsEnabled = true,
         _windows = {},
 }
@@ -308,6 +308,31 @@ local function resolveParent(config)
         error("Reborn: no usable GUI parent (no gethui, no CoreGui access, no LocalPlayer) — pass config.Parent")
 end
 
+local MARK = "__r"
+
+local function randomName()
+        local t = {}
+        for i = 1, 12 do
+                t[i] = string.char(97 + math.random(0, 25))
+        end
+        return table.concat(t)
+end
+
+local function protectGui(g)
+        pcall(function()
+                if syn and syn.protect_gui then syn.protect_gui(g) end
+        end)
+        pcall(function()
+                if protect_gui then protect_gui(g) end
+        end)
+end
+
+local function clearOld(parent)
+        for _, child in ipairs(parent:GetChildren()) do
+                if child:GetAttribute(MARK) then child:Destroy() end
+        end
+end
+
 local TOAST_TYPES = {
         info    = { color = DEFAULT_THEME.Accent,  glyph = glyphInfo },
         success = { color = DEFAULT_THEME.Success, glyph = glyphCheck },
@@ -458,14 +483,18 @@ function Reborn:Notify(a, b)
                 return
         end
         if not self._toastGui or not self._toastGui.Parent then
+                local tparent = resolveParent(nil)
+                clearOld(tparent)
                 self._toastGui = New("ScreenGui", {
-                        Name = "RebornToasts",
+                        Name = randomName(),
                         ResetOnSpawn = false,
                         IgnoreGuiInset = true,
                         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-                        DisplayOrder = 999,
-                        Parent = resolveParent(nil),
+                        DisplayOrder = math.random(900001, 999999),
                 })
+                self._toastGui:SetAttribute(MARK, true)
+                protectGui(self._toastGui)
+                self._toastGui.Parent = tparent
                 self._toastLayer = buildToastLayer(self._toastGui, DEFAULT_THEME)
         end
         self._toastLayer.Notify(cfg)
@@ -481,17 +510,18 @@ function Reborn:CreateWindow(config)
         end
 
         local parent = resolveParent(config)
-        local old = parent:FindFirstChild("RebornUI")
-        if old then old:Destroy() end
+        clearOld(parent)
 
         local gui = New("ScreenGui", {
-                Name = "RebornUI",
+                Name = randomName(),
                 ResetOnSpawn = false,
                 IgnoreGuiInset = true,
                 ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-                DisplayOrder = 999,
-                Parent = parent,
+                DisplayOrder = math.random(100000, 900000),
         })
+        gui:SetAttribute(MARK, true)
+        protectGui(gui)
+        gui.Parent = parent
 
         local conns = {}
         local function connect(signal, fn)
@@ -525,7 +555,7 @@ function Reborn:CreateWindow(config)
         }
 
         local windowFrame = New("CanvasGroup", {
-                Name = "RebornWindow",
+                Name = randomName(),
                 Size = UDim2.new(0, W, 0, H),
                 BackgroundColor3 = theme.Surface,
                 BorderSizePixel = 0,

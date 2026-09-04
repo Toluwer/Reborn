@@ -2,7 +2,7 @@
 
 A dark, minimalist UI library for Roblox, implemented in a single Luau module.
 
-![version](https://img.shields.io/badge/version-v0.2.0-0070f3)
+![version](https://img.shields.io/badge/version-v0.3.0-0070f3)
 
 ## Features
 
@@ -11,6 +11,7 @@ A dark, minimalist UI library for Roblox, implemented in a single Luau module.
 - Toggles, sliders, dropdowns, keybinds, color pickers, text inputs, buttons, paragraphs
 - Toast notifications
 - Configurable theme
+- Randomized instance names, hidden parenting (`gethui` / `protect_gui`), no console output
 - Zero dependencies — plain instances only, no assets or external fonts
 
 ## Installation
