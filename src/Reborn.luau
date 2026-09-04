@@ -1028,7 +1028,7 @@ function Reborn:CreateWindow(config)
                 end
         end
 
-        content.Scrolled:Connect(function() closeAllPops() end)
+        content:GetPropertyChangedSignal("CanvasPosition"):Connect(function() closeAllPops() end)
         dragZone.InputBegan:Connect(function() closeAllPops() end)
 
         local confirmActive = false
