@@ -5,7 +5,7 @@ local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.3.0",
+        Version = "0.4.0",
         NotificationsEnabled = true,
         _windows = {},
 }
@@ -200,8 +200,8 @@ local function iconChevron(parent)
                 Parent = parent,
         })
         local icon = iconBars(c, {
-                { x = 2, y = 9, w = 8, h = 2, rot = 45 },
-                { x = 8, y = 9, w = 8, h = 2, rot = -45 },
+                { x = 2, y = 8, w = 8, h = 2, rot = 45 },
+                { x = 8, y = 8, w = 8, h = 2, rot = -45 },
         })
         icon.Container = c
         return icon
@@ -554,6 +554,8 @@ function Reborn:CreateWindow(config)
                 tabs = {},
         }
 
+        local Window = nil
+
         local windowFrame = New("CanvasGroup", {
                 Name = randomName(),
                 Size = UDim2.new(0, W, 0, H),
@@ -804,9 +806,57 @@ function Reborn:CreateWindow(config)
                 end
         end)
 
+        local closeAllPops
+
+        local grip = New("TextButton", {
+                AnchorPoint = Vector2.new(1, 1),
+                Position = UDim2.new(1, -1, 1, -1),
+                Size = UDim2.new(0, 20, 0, 20),
+                BackgroundTransparency = 1,
+                Text = "",
+                AutoButtonColor = false,
+                ZIndex = 25,
+                Parent = windowFrame,
+        })
+        local gripIcon = iconBars(grip, {
+                { x = 14, y = 2, w = 2, h = 2 },
+                { x = 10, y = 6, w = 2, h = 2 },
+                { x = 6, y = 10, w = 2, h = 2 },
+                { x = 2, y = 14, w = 2, h = 2 },
+        })
+        gripIcon.SetColor(theme.TextFaint)
+        grip.MouseEnter:Connect(function()
+                gripIcon.SetColor(theme.Text)
+        end)
+        grip.MouseLeave:Connect(function()
+                gripIcon.SetColor(theme.TextFaint)
+        end)
+        local resizeState = nil
+        grip.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        closeAllPops()
+                        resizeState = { sx = input.Position.X, sy = input.Position.Y, w = W, h = H }
+                end
+        end)
+        connect(UserInputService.InputChanged, function(input)
+                if resizeState and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                        local v = camera.ViewportSize
+                        W = math.floor(clamp(resizeState.w + (input.Position.X - resizeState.sx), 540, v.X * 0.96) / 2) * 2
+                        H = math.floor(clamp(resizeState.h + (input.Position.Y - resizeState.sy), 360, v.Y * 0.88) / 2) * 2
+                        windowFrame.Size = UDim2.new(0, W, 0, H)
+                end
+        end)
+        connect(UserInputService.InputEnded, function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        resizeState = nil
+                end
+        end)
+
         local function setMinimized(m)
                 if state.min == m then return end
                 state.min = m
+                grip.Visible = not m
+                if m then closeAllPops() end
                 for _, f in ipairs(minIcon.Frames) do f.Visible = not m end
                 for _, f in ipairs(plusIcon.Frames) do f.Visible = m end
                 if m then
@@ -847,8 +897,6 @@ function Reborn:CreateWindow(config)
                         if not state.closed then launcher.Visible = false end
                 end)
         end
-
-        closeBtn.Activated:Connect(closeWindow)
 
         launcher.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -959,7 +1007,7 @@ function Reborn:CreateWindow(config)
                 table.insert(state.searchRows, { frame = frame, text = text, section = section })
         end
 
-        local function closeAllPops(except)
+        closeAllPops = function(except)
                 for i = #state.openPops, 1, -1 do
                         if state.openPops[i].pop ~= except then
                                 state.openPops[i].close()
@@ -979,14 +1027,161 @@ function Reborn:CreateWindow(config)
                 end
         end
 
-        local function liftRow(row, on)
-                local el = row
-                while el and el ~= content do
-                        if el:IsA("GuiObject") then
-                                el.ZIndex = on and 30 or 1
+        content.Scrolled:Connect(function() closeAllPops() end)
+        dragZone.InputBegan:Connect(function() closeAllPops() end)
+
+        local confirmActive = false
+        local scrim, card
+
+        local function hideConfirm()
+                if not confirmActive then return end
+                confirmActive = false
+                tween(scrim, 0.15, { BackgroundTransparency = 1 })
+                tween(card, 0.15, { GroupTransparency = 1 })
+                task.delay(0.17, function()
+                        if not confirmActive then
+                                card.Visible = false
+                                scrim.Visible = false
                         end
-                        el = el.Parent
+                end)
+        end
+
+        local function unloadNow()
+                hideConfirm()
+                closeAllPops()
+                tween(windowFrame, 0.16, { GroupTransparency = 1 })
+                task.delay(0.18, function()
+                        if Window then pcall(function() Window:Destroy() end) end
+                end)
+        end
+
+        local function showConfirm()
+                if confirmActive then return end
+                setMinimized(false)
+                closeAllPops()
+                if searchBox.Size.X.Offset > 0 then closeSearch() end
+                if not scrim then
+                        scrim = New("Frame", {
+                                Size = UDim2.new(1, 0, 1, 0),
+                                BackgroundColor3 = Color3.new(0, 0, 0),
+                                BackgroundTransparency = 1,
+                                BorderSizePixel = 0,
+                                ZIndex = 30,
+                                Visible = false,
+                                Parent = windowFrame,
+                        })
+                        card = New("CanvasGroup", {
+                                AnchorPoint = Vector2.new(0.5, 0.5),
+                                Position = UDim2.new(0.5, 0, 0.5, 0),
+                                Size = UDim2.new(0, 420, 0, 156),
+                                BackgroundColor3 = theme.Overlay,
+                                BorderSizePixel = 0,
+                                GroupTransparency = 1,
+                                Visible = false,
+                                ZIndex = 31,
+                                Parent = windowFrame,
+                        })
+                        corner(card, 8)
+                        stroke(card, theme.LineStrong)
+                        New("TextLabel", {
+                                Position = UDim2.new(0, 20, 0, 20),
+                                Size = UDim2.new(1, -40, 0, 16),
+                                BackgroundTransparency = 1,
+                                Font = F.Semibold,
+                                TextSize = 14,
+                                TextColor3 = theme.Text,
+                                TextXAlignment = Enum.TextXAlignment.Left,
+                                Text = "Close UI",
+                                Parent = card,
+                        })
+                        New("TextLabel", {
+                                Position = UDim2.new(0, 20, 0, 44),
+                                Size = UDim2.new(1, -40, 0, 40),
+                                BackgroundTransparency = 1,
+                                Font = F.Regular,
+                                TextSize = 13,
+                                TextColor3 = theme.TextMuted,
+                                TextXAlignment = Enum.TextXAlignment.Left,
+                                TextYAlignment = Enum.TextYAlignment.Top,
+                                TextWrapped = true,
+                                Text = "Are you sure you want to close the UI? Reborn will be completely unloaded.",
+                                Parent = card,
+                        })
+                        local cancelB = New("TextButton", {
+                                Position = UDim2.new(0, 24, 0, 100),
+                                Size = UDim2.new(0.5, -14, 0, 36),
+                                BackgroundTransparency = 1,
+                                BackgroundColor3 = theme.RowHover,
+                                Text = "Cancel",
+                                Font = F.Semibold,
+                                TextSize = 13,
+                                TextColor3 = theme.TextMuted,
+                                AutoButtonColor = false,
+                                BorderSizePixel = 0,
+                                Parent = card,
+                        })
+                        corner(cancelB, 6)
+                        local cbs = stroke(cancelB, theme.Line)
+                        local closeB = New("TextButton", {
+                                Position = UDim2.new(0.5, 10, 0, 100),
+                                Size = UDim2.new(0.5, -14, 0, 36),
+                                BackgroundColor3 = theme.Error,
+                                Text = "Close",
+                                Font = F.Semibold,
+                                TextSize = 13,
+                                TextColor3 = Color3.new(1, 1, 1),
+                                AutoButtonColor = false,
+                                BorderSizePixel = 0,
+                                Parent = card,
+                        })
+                        corner(closeB, 6)
+                        cancelB.MouseEnter:Connect(function()
+                                cancelB.BackgroundTransparency = 0
+                                cancelB.TextColor3 = theme.Text
+                                cbs.Color = theme.LineStrong
+                        end)
+                        cancelB.MouseLeave:Connect(function()
+                                cancelB.BackgroundTransparency = 1
+                                cancelB.TextColor3 = theme.TextMuted
+                                cbs.Color = theme.Line
+                        end)
+                        closeB.MouseEnter:Connect(function()
+                                closeB.BackgroundColor3 = Color3.fromRGB(255, 51, 51)
+                        end)
+                        closeB.MouseLeave:Connect(function()
+                                closeB.BackgroundColor3 = theme.Error
+                        end)
+                        cancelB.Activated:Connect(hideConfirm)
+                        closeB.Activated:Connect(unloadNow)
                 end
+                confirmActive = true
+                card.Size = UDim2.new(0, math.min(420, W - 48), 0, 156)
+                scrim.Visible = true
+                card.Visible = true
+                scrim.BackgroundTransparency = 1
+                card.GroupTransparency = 1
+                tween(scrim, 0.16, { BackgroundTransparency = 0.42 })
+                tween(card, 0.18, { GroupTransparency = 0 })
+        end
+
+        closeBtn.Activated:Connect(showConfirm)
+
+        local function mountPop(row, pop, popH, popW, alignRight)
+                local rp, rs = row.AbsolutePosition, row.AbsoluteSize
+                local wp = windowFrame.AbsolutePosition
+                local wb = wp.Y + windowFrame.AbsoluteSize.Y
+                local x = alignRight and (rp.X + rs.X - popW) or rp.X
+                local y = rp.Y + rs.Y + 6
+                if y + popH > wb - 8 then
+                        y = rp.Y - popH - 6
+                        if y < wp.Y + GEO.Header + 8 then
+                                y = wp.Y + GEO.Header + 8
+                        end
+                end
+                pop.Parent = gui
+                pop.ZIndex = 45
+                pop.Size = UDim2.new(0, popW, 0, popH)
+                return x, y
         end
 
         local function addToggle(section, cfg)
@@ -1197,7 +1392,7 @@ function Reborn:CreateWindow(config)
                 })
 
                 local options = cfg.Options or {}
-                local popH = 10 + #options * GEO.OptH
+                local popH = 10 + math.max(#options, 1) * GEO.OptH
                 local pop = New("CanvasGroup", {
                         Position = UDim2.new(0, 0, 1, 6),
                         Size = UDim2.new(1, 0, 0, popH),
@@ -1212,8 +1407,19 @@ function Reborn:CreateWindow(config)
                 stroke(pop, theme.LineStrong)
         padding(pop, 5)
         list(pop, 0)
-
-        local dd = { Value = cfg.Value or (options[1]) }
+        if #options == 0 then
+                New("TextLabel", {
+                        Size = UDim2.new(1, 0, 0, GEO.OptH),
+                        BackgroundTransparency = 1,
+                        Font = F.Medium,
+                        TextSize = 13,
+                        TextColor3 = theme.TextFaint,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        Text = "No options",
+                        Parent = pop,
+                })
+        end
+        local dd = { Value = cfg.Value or options[1] or "" }
                 local optBtns = {}
                 local function fit()
                         local vw = clamp(measureText(tostring(dd.Value), 13, F.Medium), 24, 160)
@@ -1226,15 +1432,14 @@ function Reborn:CreateWindow(config)
                         dd._open = o
                         if o then
                                 closeAllPops(pop)
-                                liftRow(row, true)
+                                local x, y = mountPop(row, pop, popH, row.AbsoluteSize.X)
                                 pop.Visible = true
-                                pop.Position = UDim2.new(0, 0, 1, 10)
-                                tween(pop, 0.16, { GroupTransparency = 0, Position = UDim2.new(0, 0, 1, 6) })
+                                pop.Position = UDim2.new(0, x, 0, y + 4)
+                                tween(pop, 0.16, { GroupTransparency = 0, Position = UDim2.new(0, x, 0, y) })
                                 tween(chev.Container, 0.18, { Rotation = 180 })
                                 registerPop(row, pop, setOpen)
                         else
-                                liftRow(row, false)
-                                tween(pop, 0.14, { GroupTransparency = 1, Position = UDim2.new(0, 0, 1, 10) })
+                                tween(pop, 0.14, { GroupTransparency = 1, Position = UDim2.new(0, pop.Position.X.Offset, 0, pop.Position.Y.Offset + 4) })
                                 task.delay(0.16, function()
                                         if not dd._open then pop.Visible = false end
                                 end)
@@ -1675,14 +1880,13 @@ function Reborn:CreateWindow(config)
                         open = o
                         if o then
                                 closeAllPops(pop)
-                                liftRow(row, true)
+                                local x, y = mountPop(row, pop, popH, GEO.PopW, true)
                                 pop.Visible = true
-                                pop.Position = UDim2.new(1, -GEO.RowPad, 0, GEO.RowH + 10)
-                                tween(pop, 0.16, { GroupTransparency = 0, Position = UDim2.new(1, -GEO.RowPad, 0, GEO.RowH + 6) })
+                                pop.Position = UDim2.new(0, x, 0, y + 4)
+                                tween(pop, 0.16, { GroupTransparency = 0, Position = UDim2.new(0, x, 0, y) })
                                 registerPop(row, pop, setOpen)
                         else
-                                liftRow(row, false)
-                                tween(pop, 0.14, { GroupTransparency = 1, Position = UDim2.new(1, -GEO.RowPad, 0, GEO.RowH + 10) })
+                                tween(pop, 0.14, { GroupTransparency = 1, Position = UDim2.new(0, pop.Position.X.Offset, 0, pop.Position.Y.Offset + 4) })
                                 task.delay(0.16, function()
                                         if not open then pop.Visible = false end
                                 end)
@@ -1980,12 +2184,11 @@ function Reborn:CreateWindow(config)
                         if n ~= 2 then return end
                         if tab.Columns then return end
                         pageList:Destroy()
-                        local colW = (W - 192 - GEO.GridGap) / 2
                         tab.Columns = {}
                         for i = 1, 2 do
                                 local col = New("Frame", {
-                                        Position = UDim2.new(0, (i - 1) * (colW + GEO.GridGap), 0, 0),
-                                        Size = UDim2.new(0, colW, 0, 0),
+                                        Position = UDim2.new(0.5 * (i - 1), (i == 1) and 0 or GEO.GridGap / 2, 0, 0),
+                                        Size = UDim2.new(0.5, -(GEO.GridGap / 2), 0, 0),
                                         AutomaticSize = Enum.AutomaticSize.Y,
                                         BackgroundTransparency = 1,
                                         Parent = page,
@@ -2070,13 +2273,17 @@ function Reborn:CreateWindow(config)
                         end
                 end
                 if input.KeyCode == Enum.KeyCode.Escape then
-                        for i = #state.openPops, 1, -1 do
-                                state.openPops[i].close()
+                        if confirmActive then
+                                hideConfirm()
+                        else
+                                for i = #state.openPops, 1, -1 do
+                                        state.openPops[i].close()
+                                end
                         end
                 end
         end)
 
-        local Window = {
+        Window = {
                 Title = tostring(config.Title or "Reborn"),
                 Theme = theme,
                 Gui = gui,
@@ -2133,6 +2340,11 @@ function Reborn:CreateWindow(config)
                         end
                 end
                 gui:Destroy()
+                if #Reborn._windows == 0 and Reborn._toastGui then
+                        pcall(function() Reborn._toastGui:Destroy() end)
+                        Reborn._toastGui = nil
+                        Reborn._toastLayer = nil
+                end
         end
 
         table.insert(Reborn._windows, Window)
