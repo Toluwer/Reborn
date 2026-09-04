@@ -5,7 +5,7 @@ local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.4.0",
+        Version = "0.4.1",
         NotificationsEnabled = true,
         _windows = {},
 }
@@ -284,26 +284,26 @@ local function glyphCheck(parent)
 end
 
 local function resolveParent(config)
-        if config and config.Parent then return config.Parent end
+        if config and config.Parent then return config.Parent, false end
         local ok, hidden = pcall(function()
                 if gethui then return gethui() end
                 return nil
         end)
-        if ok and type(hidden) == "Instance" then return hidden end
+        if ok and type(hidden) == "Instance" then return hidden, true end
         local okCore = pcall(function()
                 local probe = Instance.new("Folder")
                 probe.Parent = game:GetService("CoreGui")
                 probe:Destroy()
         end)
-        if okCore then return game:GetService("CoreGui") end
+        if okCore then return game:GetService("CoreGui"), false end
         local player = Players.LocalPlayer
         if player then
                 local pg = player:FindFirstChild("PlayerGui")
-                if pg then return pg end
+                if pg then return pg, false end
                 local okWait, waited = pcall(function()
                         return player:WaitForChild("PlayerGui", 5)
                 end)
-                if okWait and waited then return waited end
+                if okWait and waited then return waited, false end
         end
         error("Reborn: no usable GUI parent (no gethui, no CoreGui access, no LocalPlayer) — pass config.Parent")
 end
@@ -372,7 +372,6 @@ local function buildToastLayer(gui, theme)
                 end
                 tween(item.toast, 0.24, {
                         Position = UDim2.new(0, GEO.ToastW + 14, 0, item.toast.Position.Y.Offset),
-                        GroupTransparency = 1,
                 })
                 task.delay(0.26, function()
                         if item.toast then item.toast:Destroy() end
@@ -383,14 +382,13 @@ local function buildToastLayer(gui, theme)
         local function notify(cfg)
                 cfg = cfg or {}
                 local kind = TOAST_TYPES[cfg.Type] or TOAST_TYPES.info
-                local toast = New("CanvasGroup", {
+                local toast = New("Frame", {
                         Position = UDim2.new(0, GEO.ToastW + 18, 0, 0),
                         Size = UDim2.new(0, GEO.ToastW, 0, 0),
                         AutomaticSize = Enum.AutomaticSize.Y,
                         BackgroundColor3 = theme.Overlay,
                         BackgroundTransparency = 0.06,
                         BorderSizePixel = 0,
-                        GroupTransparency = 1,
                         Parent = layer,
                 })
                 corner(toast, 8)
@@ -451,7 +449,7 @@ local function buildToastLayer(gui, theme)
                 relayout(false)
                 local targetY = toast.Position.Y.Offset
                 toast.Position = UDim2.new(0, GEO.ToastW + 18, 0, targetY)
-                tween(toast, 0.22, { Position = UDim2.new(0, 0, 0, targetY), GroupTransparency = 0 })
+                tween(toast, 0.22, { Position = UDim2.new(0, 0, 0, targetY) })
                 task.delay(cfg.Duration or 3.6, function() dismiss(item) end)
                 return item
         end
@@ -483,7 +481,7 @@ function Reborn:Notify(a, b)
                 return
         end
         if not self._toastGui or not self._toastGui.Parent then
-                local tparent = resolveParent(nil)
+                local tparent, viaHidden = resolveParent(nil)
                 clearOld(tparent)
                 self._toastGui = New("ScreenGui", {
                         Name = randomName(),
@@ -493,7 +491,7 @@ function Reborn:Notify(a, b)
                         DisplayOrder = math.random(900001, 999999),
                 })
                 self._toastGui:SetAttribute(MARK, true)
-                protectGui(self._toastGui)
+                if not viaHidden then protectGui(self._toastGui) end
                 self._toastGui.Parent = tparent
                 self._toastLayer = buildToastLayer(self._toastGui, DEFAULT_THEME)
         end
@@ -509,8 +507,12 @@ function Reborn:CreateWindow(config)
                 for k, v in pairs(config.Theme) do theme[k] = v end
         end
 
-        local parent = resolveParent(config)
+        local parent, viaHidden = resolveParent(config)
         clearOld(parent)
+        for i = #Reborn._windows, 1, -1 do
+                local w = Reborn._windows[i]
+                if not w.Gui or w.Gui.Parent == nil then table.remove(Reborn._windows, i) end
+        end
 
         local gui = New("ScreenGui", {
                 Name = randomName(),
@@ -520,7 +522,7 @@ function Reborn:CreateWindow(config)
                 DisplayOrder = math.random(100000, 900000),
         })
         gui:SetAttribute(MARK, true)
-        protectGui(gui)
+        if not viaHidden then protectGui(gui) end
         gui.Parent = parent
 
         local conns = {}
@@ -530,10 +532,15 @@ function Reborn:CreateWindow(config)
                 return c
         end
 
-        local camera = workspace.CurrentCamera or workspace:WaitForChild("Camera")
+        local camera = workspace.CurrentCamera or workspace:FindFirstChildOfClass("Camera")
+        local function viewportSize()
+                local c = workspace.CurrentCamera or camera
+                if c then return c.ViewportSize end
+                return Vector2.new(1920, 1080)
+        end
 
         local function computeSize()
-                local v = camera.ViewportSize
+                local v = viewportSize()
                 local w = config.Size and config.Size.X or GEO.WindowMaxW
                 local h = config.Size and config.Size.Y or GEO.WindowMaxH
                 w = math.floor(math.min(w, v.X * 0.96) / 2) * 2
@@ -556,12 +563,11 @@ function Reborn:CreateWindow(config)
 
         local Window = nil
 
-        local windowFrame = New("CanvasGroup", {
+        local windowFrame = New("Frame", {
                 Name = randomName(),
                 Size = UDim2.new(0, W, 0, H),
                 BackgroundColor3 = theme.Surface,
                 BorderSizePixel = 0,
-                GroupTransparency = 1,
                 ClipsDescendants = true,
                 Parent = gui,
         })
@@ -570,23 +576,24 @@ function Reborn:CreateWindow(config)
 
         local function recenter()
                 if state.dragged or state.closed then return end
-                local v = camera.ViewportSize
+                local v = viewportSize()
                 windowFrame.Position = UDim2.new(0, rnd(v.X / 2 - W / 2), 0, rnd(v.Y / 2 - H / 2))
         end
         recenter()
         windowFrame.Position = UDim2.new(0, windowFrame.Position.X.Offset, 0, windowFrame.Position.Y.Offset + 12)
         tween(windowFrame, 0.4, {
-                GroupTransparency = 0,
                 Position = UDim2.new(0, windowFrame.Position.X.Offset, 0, windowFrame.Position.Y.Offset - 12),
         }, Enum.EasingStyle.Quint)
 
-        connect(camera:GetPropertyChangedSignal("ViewportSize"), function()
-                recenter()
-        end)
+        if camera then
+                connect(camera:GetPropertyChangedSignal("ViewportSize"), function()
+                        recenter()
+                end)
+        end
 
         local header = New("Frame", {
                 Size = UDim2.new(1, 0, 0, GEO.Header),
-                BackgroundColor3 = theme.Surface,
+                BackgroundTransparency = 1,
                 BorderSizePixel = 0,
                 ZIndex = 20,
                 Parent = windowFrame,
@@ -708,17 +715,16 @@ function Reborn:CreateWindow(config)
         for _, f in ipairs(plusIcon.Frames) do f.Visible = false end
         local closeBtn = captionBtn(GEO.SearchW + 9 + 28 + 9 + GEO.WinBtn + 9, iconClose, true)
 
-        local bodyGroup = New("CanvasGroup", {
+        local bodyGroup = New("Frame", {
                 Position = UDim2.new(0, 0, 0, GEO.Header),
                 Size = UDim2.new(1, 0, 1, -GEO.Header),
                 BackgroundTransparency = 1,
-                GroupTransparency = 0,
                 Parent = windowFrame,
         })
 
         local sidebar = New("Frame", {
                 Size = UDim2.new(0, GEO.Sidebar, 1, 0),
-                BackgroundColor3 = theme.Surface,
+                BackgroundTransparency = 1,
                 BorderSizePixel = 0,
                 Parent = bodyGroup,
         })
@@ -752,13 +758,12 @@ function Reborn:CreateWindow(config)
                 Parent = bodyGroup,
         })
 
-        local launcher = New("CanvasGroup", {
+        local launcher = New("Frame", {
                 AnchorPoint = Vector2.new(1, 1),
                 Position = UDim2.new(1, -22, 1, -14),
                 Size = UDim2.new(0, GEO.Launcher, 0, GEO.Launcher),
                 BackgroundColor3 = theme.Overlay,
                 BorderSizePixel = 0,
-                GroupTransparency = 1,
                 Visible = false,
                 ZIndex = 40,
                 Parent = gui,
@@ -794,7 +799,7 @@ function Reborn:CreateWindow(config)
         end)
         connect(UserInputService.InputChanged, function(input)
                 if dragState and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                        local v = camera.ViewportSize
+                        local v = viewportSize()
                         local nx = clamp(dragState.ox + (input.Position.X - dragState.sx), -W + 140, v.X - 140)
                         local ny = clamp(dragState.oy + (input.Position.Y - dragState.sy), 0, v.Y - GEO.Header)
                         windowFrame.Position = UDim2.new(0, rnd(nx), 0, rnd(ny))
@@ -840,7 +845,7 @@ function Reborn:CreateWindow(config)
         end)
         connect(UserInputService.InputChanged, function(input)
                 if resizeState and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                        local v = camera.ViewportSize
+                        local v = viewportSize()
                         W = math.floor(clamp(resizeState.w + (input.Position.X - resizeState.sx), 540, v.X * 0.96) / 2) * 2
                         H = math.floor(clamp(resizeState.h + (input.Position.Y - resizeState.sy), 360, v.Y * 0.88) / 2) * 2
                         windowFrame.Size = UDim2.new(0, W, 0, H)
@@ -860,10 +865,8 @@ function Reborn:CreateWindow(config)
                 for _, f in ipairs(minIcon.Frames) do f.Visible = not m end
                 for _, f in ipairs(plusIcon.Frames) do f.Visible = m end
                 if m then
-                        tween(bodyGroup, 0.18, { GroupTransparency = 1 })
                         tween(windowFrame, 0.26, { Size = UDim2.new(0, W, 0, GEO.Header) }, Enum.EasingStyle.Quint)
                 else
-                        tween(bodyGroup, 0.18, { GroupTransparency = 0 })
                         tween(windowFrame, 0.26, { Size = UDim2.new(0, W, 0, H) }, Enum.EasingStyle.Quint)
                 end
         end
@@ -871,14 +874,13 @@ function Reborn:CreateWindow(config)
         local function closeWindow()
                 if state.closed then return end
                 state.closed = true
-                tween(windowFrame, 0.16, { GroupTransparency = 1 })
+                tween(windowFrame, 0.16, { Position = UDim2.new(0, windowFrame.Position.X.Offset, 0, windowFrame.Position.Y.Offset + 12) })
                 task.delay(0.18, function()
                         if state.closed then windowFrame.Visible = false end
                 end)
                 launcher.Visible = true
-                launcher.GroupTransparency = 1
-                launcher.Position = UDim2.new(1, -22, 1, -14)
-                tween(launcher, 0.18, { GroupTransparency = 0, Position = UDim2.new(1, -22, 1, -22) })
+                launcher.Position = UDim2.new(1, -22, 1, -6)
+                tween(launcher, 0.18, { Position = UDim2.new(1, -22, 1, -22) })
         end
 
         minBtn.Activated:Connect(function()
@@ -890,9 +892,8 @@ function Reborn:CreateWindow(config)
                 state.closed = false
                 recenter()
                 windowFrame.Visible = true
-                windowFrame.GroupTransparency = 1
-                tween(windowFrame, 0.2, { GroupTransparency = 0 })
-                tween(launcher, 0.14, { GroupTransparency = 1 })
+                windowFrame.Position = UDim2.new(0, windowFrame.Position.X.Offset, 0, windowFrame.Position.Y.Offset + 12)
+                tween(windowFrame, 0.2, { Position = UDim2.new(0, windowFrame.Position.X.Offset, 0, windowFrame.Position.Y.Offset - 12) })
                 task.delay(0.16, function()
                         if not state.closed then launcher.Visible = false end
                 end)
@@ -1037,7 +1038,7 @@ function Reborn:CreateWindow(config)
                 if not confirmActive then return end
                 confirmActive = false
                 tween(scrim, 0.15, { BackgroundTransparency = 1 })
-                tween(card, 0.15, { GroupTransparency = 1 })
+                tween(card, 0.15, { Position = UDim2.new(0.5, 0, 0.5, 6) })
                 task.delay(0.17, function()
                         if not confirmActive then
                                 card.Visible = false
@@ -1049,7 +1050,7 @@ function Reborn:CreateWindow(config)
         local function unloadNow()
                 hideConfirm()
                 closeAllPops()
-                tween(windowFrame, 0.16, { GroupTransparency = 1 })
+                tween(windowFrame, 0.16, { Position = UDim2.new(0, windowFrame.Position.X.Offset, 0, windowFrame.Position.Y.Offset + 12) })
                 task.delay(0.18, function()
                         if Window then pcall(function() Window:Destroy() end) end
                 end)
@@ -1070,13 +1071,12 @@ function Reborn:CreateWindow(config)
                                 Visible = false,
                                 Parent = windowFrame,
                         })
-                        card = New("CanvasGroup", {
+                        card = New("Frame", {
                                 AnchorPoint = Vector2.new(0.5, 0.5),
                                 Position = UDim2.new(0.5, 0, 0.5, 0),
                                 Size = UDim2.new(0, 420, 0, 156),
                                 BackgroundColor3 = theme.Overlay,
                                 BorderSizePixel = 0,
-                                GroupTransparency = 1,
                                 Visible = false,
                                 ZIndex = 31,
                                 Parent = windowFrame,
@@ -1159,9 +1159,9 @@ function Reborn:CreateWindow(config)
                 scrim.Visible = true
                 card.Visible = true
                 scrim.BackgroundTransparency = 1
-                card.GroupTransparency = 1
+                card.Position = UDim2.new(0.5, 0, 0.5, 8)
                 tween(scrim, 0.16, { BackgroundTransparency = 0.42 })
-                tween(card, 0.18, { GroupTransparency = 0 })
+                tween(card, 0.18, { Position = UDim2.new(0.5, 0, 0.5, 0) })
         end
 
         closeBtn.Activated:Connect(showConfirm)
@@ -1170,7 +1170,7 @@ function Reborn:CreateWindow(config)
                 local rp, rs = row.AbsolutePosition, row.AbsoluteSize
                 local wp = windowFrame.AbsolutePosition
                 local wb = wp.Y + windowFrame.AbsoluteSize.Y
-                local x = alignRight and (rp.X + rs.X - popW) or rp.X
+                local x = alignRight and (rp.X + rs.X - GEO.RowPad - popW) or rp.X
                 local y = rp.Y + rs.Y + 6
                 if y + popH > wb - 8 then
                         y = rp.Y - popH - 6
@@ -1180,6 +1180,7 @@ function Reborn:CreateWindow(config)
                 end
                 pop.Parent = gui
                 pop.ZIndex = 45
+                pop.AnchorPoint = Vector2.new(0, 0)
                 pop.Size = UDim2.new(0, popW, 0, popH)
                 return x, y
         end
@@ -1393,33 +1394,32 @@ function Reborn:CreateWindow(config)
 
                 local options = cfg.Options or {}
                 local popH = 10 + math.max(#options, 1) * GEO.OptH
-                local pop = New("CanvasGroup", {
+                local pop = New("Frame", {
                         Position = UDim2.new(0, 0, 1, 6),
                         Size = UDim2.new(1, 0, 0, popH),
                         BackgroundColor3 = theme.Overlay,
                         BorderSizePixel = 0,
-                        GroupTransparency = 1,
                         Visible = false,
                         ZIndex = 25,
                         Parent = row,
                 })
                 corner(pop, 8)
                 stroke(pop, theme.LineStrong)
-        padding(pop, 5)
-        list(pop, 0)
-        if #options == 0 then
-                New("TextLabel", {
-                        Size = UDim2.new(1, 0, 0, GEO.OptH),
-                        BackgroundTransparency = 1,
-                        Font = F.Medium,
-                        TextSize = 13,
-                        TextColor3 = theme.TextFaint,
-                        TextXAlignment = Enum.TextXAlignment.Left,
-                        Text = "No options",
-                        Parent = pop,
-                })
-        end
-        local dd = { Value = cfg.Value or options[1] or "" }
+                padding(pop, 5)
+                list(pop, 0)
+                if #options == 0 then
+                        New("TextLabel", {
+                                Size = UDim2.new(1, 0, 0, GEO.OptH),
+                                BackgroundTransparency = 1,
+                                Font = F.Medium,
+                                TextSize = 13,
+                                TextColor3 = theme.TextFaint,
+                                TextXAlignment = Enum.TextXAlignment.Left,
+                                Text = "No options",
+                                Parent = pop,
+                        })
+                end
+                local dd = { Value = cfg.Value or options[1] or "" }
                 local optBtns = {}
                 local function fit()
                         local vw = clamp(measureText(tostring(dd.Value), 13, F.Medium), 24, 160)
@@ -1435,11 +1435,11 @@ function Reborn:CreateWindow(config)
                                 local x, y = mountPop(row, pop, popH, row.AbsoluteSize.X)
                                 pop.Visible = true
                                 pop.Position = UDim2.new(0, x, 0, y + 4)
-                                tween(pop, 0.16, { GroupTransparency = 0, Position = UDim2.new(0, x, 0, y) })
+                                tween(pop, 0.16, { Position = UDim2.new(0, x, 0, y) })
                                 tween(chev.Container, 0.18, { Rotation = 180 })
                                 registerPop(row, pop, setOpen)
                         else
-                                tween(pop, 0.14, { GroupTransparency = 1, Position = UDim2.new(0, pop.Position.X.Offset, 0, pop.Position.Y.Offset + 4) })
+                                tween(pop, 0.14, { Position = UDim2.new(0, pop.Position.X.Offset, 0, pop.Position.Y.Offset + 4) })
                                 task.delay(0.16, function()
                                         if not dd._open then pop.Visible = false end
                                 end)
@@ -1692,13 +1692,12 @@ function Reborn:CreateWindow(config)
                 stroke(swatch, theme.LineStrong)
 
                 local popH = 10 + GEO.SVH + 9 + GEO.HueH + 9 + 14 + 10
-                local pop = New("CanvasGroup", {
+                local pop = New("Frame", {
                         AnchorPoint = Vector2.new(1, 0),
                         Position = UDim2.new(1, -GEO.RowPad, 0, GEO.RowH + 6),
                         Size = UDim2.new(0, GEO.PopW, 0, popH),
                         BackgroundColor3 = theme.Overlay,
                         BorderSizePixel = 0,
-                        GroupTransparency = 1,
                         Visible = false,
                         ZIndex = 25,
                         Parent = row,
@@ -1883,10 +1882,10 @@ function Reborn:CreateWindow(config)
                                 local x, y = mountPop(row, pop, popH, GEO.PopW, true)
                                 pop.Visible = true
                                 pop.Position = UDim2.new(0, x, 0, y + 4)
-                                tween(pop, 0.16, { GroupTransparency = 0, Position = UDim2.new(0, x, 0, y) })
+                                tween(pop, 0.16, { Position = UDim2.new(0, x, 0, y) })
                                 registerPop(row, pop, setOpen)
                         else
-                                tween(pop, 0.14, { GroupTransparency = 1, Position = UDim2.new(0, pop.Position.X.Offset, 0, pop.Position.Y.Offset + 4) })
+                                tween(pop, 0.14, { Position = UDim2.new(0, pop.Position.X.Offset, 0, pop.Position.Y.Offset + 4) })
                                 task.delay(0.16, function()
                                         if not open then pop.Visible = false end
                                 end)
@@ -1950,7 +1949,7 @@ function Reborn:CreateWindow(config)
                 end
                 box:GetPropertyChangedSignal("Text"):Connect(function()
                         inp.Text = box.Text
-                    if cfg.Live and cfg.Callback then cfg.Callback(box.Text, false) end
+                        if cfg.Live and cfg.Callback then cfg.Callback(box.Text, false) end
                 end)
                 return inp
         end
