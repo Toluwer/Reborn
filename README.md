@@ -2,7 +2,7 @@
 
 A dark, minimalist UI library for Roblox, implemented in a single Luau module.
 
-![version](https://img.shields.io/badge/version-v0.1.1-0070f3)
+![version](https://img.shields.io/badge/version-v0.2.0-0070f3)
 
 ## Features
 
@@ -48,18 +48,17 @@ local Reborn = loadstring(game:HttpGet(
 local Window = Reborn:CreateWindow({
     Title = "Reborn",
     Size = Vector2.new(700, 530),
-    Profile = { Name = "guest_1337", Initial = "G" },
 })
 
 local Main = Window:Tab("Main")
 local Section = Main:Section("Overview")
 
-Section:Paragraph({ Text = "Hello from Reborn." })
+Section:Paragraph("Hello from Reborn.")
 Section:Button({
     Text = "Show notification",
     Primary = true,
     Callback = function()
-        Reborn:Notify({ Title = "Hi", Description = "It works.", Type = "success" })
+        Reborn:Notify("Hi", "It works.")
     end,
 })
 
@@ -77,8 +76,8 @@ A full example is available at [`examples/basic.luau`](examples/basic.luau).
 
 | Member / method | Description |
 | --- | --- |
-| `Reborn:CreateWindow(config) -> Window` | Creates the window. `config`: `Title`, `Size` (Vector2), `Profile` (`{ Name, Initial }`), `Theme` (partial overrides), `Parent` (ScreenGui/Instance). |
-| `Reborn:Notify(config)` | Shows a toast. `config`: `Title`, `Description`, `Type` (`"info" / "success" / "error"`), `Duration`. |
+| `Reborn:CreateWindow(config) -> Window` | Creates the window. `config`: `Title`, `Size` (Vector2), `Theme` (partial overrides), `Parent` (ScreenGui/Instance). All fields optional. |
+| `Reborn:Notify(config)` | Shows a toast. Accepts a table (`Title`, `Description`, `Type` (`"info" / "success" / "error"`), `Duration`) or a shorthand: `Notify("Title", "Description")`. |
 | `Reborn.NotificationsEnabled` | Set `false` to mute all toasts. |
 | `Reborn.Theme` | Default theme table. Pass overrides via `CreateWindow`. |
 | `Reborn:Destroy()` | Destroys all windows and disconnects all input connections. |
@@ -104,7 +103,15 @@ A full example is available at [`examples/basic.luau`](examples/basic.luau).
 
 ### Section
 
-Every component takes a config table and returns an object with a `Set` method. `Set(value, fire)` re-fires the callback only when `fire` is `true`.
+Every component takes a config table and returns an object with a `Set` method. `Set(value, fire)` re-fires the callback only when `fire` is `true`. All config fields are optional; omitted values fall back to defaults (e.g. sliders default to `0–100`, dropdowns select the first option).
+
+Each component also accepts a string with an optional callback:
+
+```lua
+Section:Toggle("Enable ESP", function(value) end)
+Section:Button("Rejoin", function() end)
+Section:Paragraph("Some text.")
+```
 
 | Component | Config | Object |
 | --- | --- | --- |

@@ -5,7 +5,7 @@ local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.1.1",
+        Version = "0.2.0",
         NotificationsEnabled = true,
         _windows = {},
 }
@@ -434,7 +434,23 @@ local function buildToastLayer(gui, theme)
         return { Layer = layer, Notify = notify }
 end
 
-function Reborn:Notify(cfg)
+local function normNotify(a, b)
+        if type(a) == "string" then
+                local t = { Title = a }
+                if type(b) == "string" then t.Description = b end
+                return t
+        end
+        return a or {}
+end
+
+local function normCfg(a, b)
+        if type(a) == "string" then a = { Text = a } end
+        if type(b) == "function" and a and a.Callback == nil then a.Callback = b end
+        return a or {}
+end
+
+function Reborn:Notify(a, b)
+        local cfg = normNotify(a, b)
         if not self.NotificationsEnabled then return end
         if #self._windows > 0 then
                 local w = self._windows[#self._windows]
@@ -683,59 +699,13 @@ function Reborn:CreateWindow(config)
         })
 
         local tabsHolder = New("Frame", {
-                Size = UDim2.new(1, 0, 1, -49),
+                Size = UDim2.new(1, 0, 1, 0),
                 BackgroundTransparency = 1,
                 ClipsDescendants = true,
                 Parent = sidebar,
         })
         padding(tabsHolder, 10, 10, 8, 10)
         list(tabsHolder, 3)
-
-        local sideBottom = New("Frame", {
-                AnchorPoint = Vector2.new(0, 1),
-                Position = UDim2.new(0, 0, 1, -49),
-                Size = UDim2.new(1, 0, 0, 49),
-                BackgroundTransparency = 1,
-                Parent = sidebar,
-        })
-        New("Frame", {
-                Size = UDim2.new(1, 0, 0, 1),
-                BackgroundColor3 = theme.Line,
-                BorderSizePixel = 0,
-                Parent = sideBottom,
-        })
-        padding(sideBottom, 11, 12, 11, 12)
-        local profile = config.Profile or {}
-        local pname = profile.Name or (Players.LocalPlayer and Players.LocalPlayer.Name) or "player"
-        local initial = profile.Initial or pname:sub(1, 1):upper()
-        local avatar = New("Frame", {
-                Size = UDim2.new(0, 27, 0, 27),
-                BackgroundColor3 = theme.Accent,
-                BorderSizePixel = 0,
-                Parent = sideBottom,
-        })
-        corner(avatar, 6)
-        New("TextLabel", {
-                Size = UDim2.new(1, 0, 1, 0),
-                BackgroundTransparency = 1,
-                Font = F.Semibold,
-                TextSize = 11,
-                TextColor3 = Color3.new(1, 1, 1),
-                Text = initial,
-                Parent = avatar,
-        })
-        New("TextLabel", {
-                Position = UDim2.new(0, 36, 0, 6),
-                Size = UDim2.new(1, -40, 0, 14),
-                BackgroundTransparency = 1,
-                Font = F.Medium,
-                TextSize = 12,
-                TextColor3 = theme.Text,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                TextTruncate = Enum.TextTruncate.AtEnd,
-                Text = pname,
-                Parent = sideBottom,
-        })
 
         local content = New("ScrollingFrame", {
                 Position = UDim2.new(0, GEO.Sidebar + 1, 0, 0),
@@ -1902,14 +1872,14 @@ function Reborn:CreateWindow(config)
                 local section = { Frame = sec, Rows = rows, _tab = tab }
                 table.insert(state.sections, section)
 
-                function section:Toggle(cfg2) return addToggle(section, cfg2) end
-                function section:Slider(cfg2) return addSlider(section, cfg2) end
-                function section:Dropdown(cfg2) return addDropdown(section, cfg2) end
-                function section:Keybind(cfg2) return addKeybind(section, cfg2) end
-                function section:ColorPicker(cfg2) return addColorPicker(section, cfg2) end
-                function section:Input(cfg2) return addInput(section, cfg2) end
-                function section:Button(cfg2) return addButton(section, cfg2) end
-                function section:Paragraph(cfg2) return addParagraph(section, cfg2) end
+                function section:Toggle(a, b) return addToggle(section, normCfg(a, b)) end
+                function section:Slider(a, b) return addSlider(section, normCfg(a, b)) end
+                function section:Dropdown(a, b) return addDropdown(section, normCfg(a, b)) end
+                function section:Keybind(a, b) return addKeybind(section, normCfg(a, b)) end
+                function section:ColorPicker(a, b) return addColorPicker(section, normCfg(a, b)) end
+                function section:Input(a, b) return addInput(section, normCfg(a, b)) end
+                function section:Button(a, b) return addButton(section, normCfg(a, b)) end
+                function section:Paragraph(a, b) return addParagraph(section, normCfg(a, b)) end
                 return section
         end
 
@@ -2086,7 +2056,8 @@ function Reborn:CreateWindow(config)
                 return addTab(name)
         end
 
-        function Window:Notify(cfg)
+        function Window:Notify(a, b)
+                local cfg = normNotify(a, b)
                 if not Reborn.NotificationsEnabled then return end
                 toastLayer.Notify(cfg)
         end
