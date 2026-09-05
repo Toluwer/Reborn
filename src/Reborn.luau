@@ -5,7 +5,7 @@ local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.5.0",
+        Version = "0.5.1",
         NotificationsEnabled = true,
         _windows = {},
 }
@@ -485,6 +485,9 @@ local function buildToastLayer(gui, theme)
                 local targetY = toast.Position.Y.Offset
                 toast.Position = UDim2.new(0, GEO.ToastW + 18, 0, targetY)
                 tween(toast, 0.22, { Position = UDim2.new(0, 0, 0, targetY) })
+                task.defer(function()
+                        if not item.closed then relayout(true) end
+                end)
                 task.delay(cfg.Duration or 3.6, function() dismiss(item) end)
                 return item
         end
@@ -1033,7 +1036,7 @@ function Reborn:CreateWindow(config)
         end
 
         local function registerSearch(frame, text, section)
-                table.insert(state.searchRows, { frame = frame, text = text, section = section })
+                table.insert(state.searchRows, { frame = frame, text = text and tostring(text) or "", section = section })
         end
 
         closeAllPops = function(except)
@@ -1198,12 +1201,15 @@ function Reborn:CreateWindow(config)
                 local rp, rs = row.AbsolutePosition, row.AbsoluteSize
                 local wp = windowFrame.AbsolutePosition
                 local wb = wp.Y + windowFrame.AbsoluteSize.Y
+                local topMin = wp.Y + GEO.Header + 8
+                local capH = (wb - 8) - topMin
+                if capH > 0 and popH > capH then popH = capH end
                 local x = alignRight and (rp.X + rs.X - GEO.RowPad - popW) or rp.X
                 local y = rp.Y + rs.Y + 6
                 if y + popH > wb - 8 then
                         y = rp.Y - popH - 6
-                        if y < wp.Y + GEO.Header + 8 then
-                                y = wp.Y + GEO.Header + 8
+                        if y < topMin then
+                                y = topMin
                         end
                 end
                 pop.Parent = gui
@@ -1433,18 +1439,29 @@ function Reborn:CreateWindow(config)
                 })
                 corner(pop, 8)
                 stroke(pop, theme.LineStrong)
-                padding(pop, 5)
-                list(pop, 0)
+                local listScroll = New("ScrollingFrame", {
+                        Position = UDim2.new(0, 5, 0, 5),
+                        Size = UDim2.new(1, -10, 1, -10),
+                        BackgroundTransparency = 1,
+                        BorderSizePixel = 0,
+                        ScrollBarThickness = 4,
+                        ScrollBarImageColor3 = theme.LineStrong,
+                        ScrollingDirection = Enum.ScrollingDirection.Y,
+                        CanvasSize = UDim2.new(0, 0, 0, 0),
+                        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+                        Parent = pop,
+                })
+                list(listScroll, 0)
                 if #options == 0 then
                         New("TextLabel", {
-                                Size = UDim2.new(1, 0, 0, GEO.OptH),
+                                Size = UDim2.new(1, -6, 0, GEO.OptH),
                                 BackgroundTransparency = 1,
                                 Font = F.Medium,
                                 TextSize = 13,
                                 TextColor3 = theme.TextFaint,
                                 TextXAlignment = Enum.TextXAlignment.Left,
                                 Text = "No options",
-                                Parent = pop,
+                                Parent = listScroll,
                         })
                 end
                 local dd = { Value = cfg.Value or options[1] or "" }
@@ -1461,6 +1478,7 @@ function Reborn:CreateWindow(config)
                         if o then
                                 closeAllPops(pop)
                                 local x, y = mountPop(row, pop, popH, row.AbsoluteSize.X)
+                                listScroll.CanvasPosition = Vector2.new(0, 0)
                                 pop.Visible = true
                                 pop.Position = UDim2.new(0, x, 0, y + 4)
                                 tween(pop, 0.16, { Position = UDim2.new(0, x, 0, y) })
@@ -1479,13 +1497,13 @@ function Reborn:CreateWindow(config)
                 for i, opt in ipairs(options) do
                         local otext = tostring(opt)
                         local ob = New("TextButton", {
-                                Size = UDim2.new(1, 0, 0, GEO.OptH),
+                                Size = UDim2.new(1, -6, 0, GEO.OptH),
                                 BackgroundTransparency = 1,
                                 BackgroundColor3 = theme.OptionHover,
                                 Text = "",
                                 AutoButtonColor = false,
                                 LayoutOrder = i,
-                                Parent = pop,
+                                Parent = listScroll,
                         })
                         corner(ob, 6)
                         local ot = New("TextLabel", {
@@ -1731,7 +1749,7 @@ function Reborn:CreateWindow(config)
                 })
                 corner(pop, 8)
                 stroke(pop, theme.LineStrong)
-                padding(pop, 10)
+                padding(pop, 10, 10, 10, 10)
 
                 local sv = New("Frame", {
                         Size = UDim2.new(1, 0, 0, GEO.SVH),
@@ -1864,32 +1882,39 @@ function Reborn:CreateWindow(config)
                 end
 
                 local active = nil
+                local function padPoint(input)
+                        if input.UserInputType == Enum.UserInputType.Touch then
+                                return input.Position.X, input.Position.Y + GuiService:GetGuiInset().Y
+                        end
+                        local m = UserInputService:GetMouseLocation()
+                        return m.X, m.Y
+                end
                 local function bindPad(el, apply)
                         el.InputBegan:Connect(function(input)
                                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                                        active = { el = el, apply = apply }
+                                        active = apply
                                         apply(input)
                                 end
                         end)
                 end
+                local function applySV(input)
+                        local r, sz = sv.AbsolutePosition, sv.AbsoluteSize
+                        if sz.X < 1 or sz.Y < 1 then return end
+                        local lx, ly = padPoint(input)
+                        s = clamp((lx - r.X) / sz.X, 0, 1)
+                        v = 1 - clamp((ly - r.Y) / sz.Y, 0, 1)
+                        render(true)
+                end
+                local function applyHue(input)
+                        local r, sz = hue.AbsolutePosition, hue.AbsoluteSize
+                        if sz.X < 1 then return end
+                        local lx = padPoint(input)
+                        h = clamp((lx - r.X) / sz.X, 0, 1) * 360
+                        render(true)
+                end
                 connect(UserInputService.InputChanged, function(input)
                         if active and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                                local el = active.el
-                                local r = el.AbsolutePosition
-                                local sz = el.AbsoluteSize
-                                local insetY = GuiService:GetGuiInset().Y
-                                local lx = input.Position.X - r.X
-                                local ly = input.Position.Y - r.Y
-                                if input.UserInputType == Enum.UserInputType.Touch then
-                                        ly = input.Position.Y + insetY - r.Y
-                                end
-                                if active.apply == "sv" then
-                                        s = clamp(lx / sz.X, 0, 1)
-                                        v = 1 - clamp(ly / sz.Y, 0, 1)
-                                else
-                                        h = clamp(lx / sz.X, 0, 1) * 360
-                                end
-                                render(true)
+                                active(input)
                         end
                 end)
                 connect(UserInputService.InputEnded, function(input)
@@ -1897,8 +1922,8 @@ function Reborn:CreateWindow(config)
                                 active = nil
                         end
                 end)
-                bindPad(sv, "sv")
-                bindPad(hue, "hue")
+                bindPad(sv, applySV)
+                bindPad(hue, applyHue)
 
                 local open = false
                 local function setOpen(o)
@@ -2390,8 +2415,8 @@ function Reborn:CreateWindow(config)
 end
 
 function Reborn:Destroy()
-        for _, w in ipairs(self._windows) do
-                pcall(function() w:Destroy() end)
+        for i = #self._windows, 1, -1 do
+                pcall(function() self._windows[i]:Destroy() end)
         end
         self._windows = {}
 end
