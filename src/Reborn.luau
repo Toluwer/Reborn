@@ -5,7 +5,7 @@ local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.6.0",
+        Version = "0.7.0",
         NotificationsEnabled = true,
         _windows = {},
 }
@@ -70,9 +70,9 @@ local GEO = {
         ChipH        = 22,
         ChipMinW     = 46,
         Swatch       = 22,
-        PopW         = 172,
-        SVH          = 92,
-        HueH         = 10,
+        PopW         = 204,
+        SVH          = 140,
+        HueW         = 14,
         FieldW       = 180,
         FieldH       = 30,
         ToastW       = 294,
@@ -1816,7 +1816,7 @@ function Reborn:CreateWindow(config)
                 corner(swatch, 6)
                 stroke(swatch, theme.LineStrong)
 
-                local popH = 10 + GEO.SVH + 9 + GEO.HueH + 9 + 14 + 10
+                local popH = 10 + GEO.SVH + 10 + GEO.Swatch + 10
                 local pop = New("Frame", {
                         AnchorPoint = Vector2.new(1, 0),
                         Position = UDim2.new(1, -GEO.RowPad, 0, GEO.RowH + 6),
@@ -1832,19 +1832,19 @@ function Reborn:CreateWindow(config)
                 padding(pop, 10, 10, 10, 10)
 
                 local sv = New("Frame", {
-                        Size = UDim2.new(1, 0, 0, GEO.SVH),
+                        Size = UDim2.new(1, -(GEO.HueW + 10), 0, GEO.SVH),
                         BackgroundColor3 = Color3.new(0, 0, 0),
                         BorderSizePixel = 0,
                         Parent = pop,
                 })
-                corner(sv, 6)
+                corner(sv, 8)
                 local svHue = New("Frame", {
                         Size = UDim2.new(1, 0, 1, 0),
                         BackgroundColor3 = Color3.new(1, 1, 1),
                         BorderSizePixel = 0,
                         Parent = sv,
                 })
-                corner(svHue, 6)
+                corner(svHue, 8)
                 local svGrad = New("UIGradient", {
                         Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.new(1, 0, 0)),
                         Rotation = 0,
@@ -1856,7 +1856,7 @@ function Reborn:CreateWindow(config)
                         BorderSizePixel = 0,
                         Parent = sv,
                 })
-                corner(svDark, 6)
+                corner(svDark, 8)
                 New("UIGradient", {
                         Transparency = NumberSequence.new({
                                 NumberSequenceKeypoint.new(0, 1),
@@ -1866,23 +1866,24 @@ function Reborn:CreateWindow(config)
                         Parent = svDark,
                 })
                 local dot = New("Frame", {
-                        Size = UDim2.new(0, 12, 0, 12),
-                        BackgroundTransparency = 1,
+                        Size = UDim2.new(0, 14, 0, 14),
+                        BackgroundColor3 = Color3.new(1, 1, 1),
                         BorderSizePixel = 0,
                         ZIndex = 3,
                         Parent = sv,
                 })
-                corner(dot, 6)
-                stroke(dot, Color3.new(1, 1, 1), 0, 2)
+                corner(dot, 7)
+                stroke(dot, Color3.new(0, 0, 0), 0.2, 2)
 
                 local hue = New("Frame", {
-                        Position = UDim2.new(0, 0, 0, GEO.SVH + 9),
-                        Size = UDim2.new(1, 0, 0, GEO.HueH),
+                        AnchorPoint = Vector2.new(1, 0),
+                        Position = UDim2.new(1, 0, 0, 0),
+                        Size = UDim2.new(0, GEO.HueW, 0, GEO.SVH),
                         BackgroundColor3 = Color3.new(1, 1, 1),
                         BorderSizePixel = 0,
                         Parent = pop,
                 })
-                corner(hue, 5)
+                corner(hue, 7)
                 New("UIGradient", {
                         Color = ColorSequence.new({
                                 ColorSequenceKeypoint.new(0.00, Color3.fromRGB(255, 0, 0)),
@@ -1893,23 +1894,32 @@ function Reborn:CreateWindow(config)
                                 ColorSequenceKeypoint.new(5 / 6, Color3.fromRGB(255, 0, 255)),
                                 ColorSequenceKeypoint.new(1.00, Color3.fromRGB(255, 0, 0)),
                         }),
-                        Rotation = 0,
+                        Rotation = 90,
                         Parent = hue,
                 })
                 local hdot = New("Frame", {
-                        Position = UDim2.new(0, 0, 0, -1),
-                        Size = UDim2.new(0, 12, 0, 12),
-                        BackgroundTransparency = 1,
+                        Position = UDim2.new(0, -2, 0, 0),
+                        Size = UDim2.new(0, 18, 0, 18),
+                        BackgroundColor3 = Color3.new(1, 1, 1),
                         BorderSizePixel = 0,
                         ZIndex = 3,
                         Parent = hue,
                 })
-                corner(hdot, 6)
-                stroke(hdot, Color3.new(1, 1, 1), 0, 2)
+                corner(hdot, 9)
+                stroke(hdot, Color3.new(0, 0, 0), 0.2, 2)
 
+                local preview = New("Frame", {
+                        Position = UDim2.new(0, 0, 0, GEO.SVH + 10),
+                        Size = UDim2.new(0, GEO.Swatch, 0, GEO.Swatch),
+                        BackgroundColor3 = theme.Accent,
+                        BorderSizePixel = 0,
+                        Parent = pop,
+                })
+                corner(preview, 6)
+                stroke(preview, theme.LineStrong)
                 New("TextLabel", {
-                        Position = UDim2.new(0, 0, 0, GEO.SVH + 9 + GEO.HueH + 9),
-                        Size = UDim2.new(0, 0, 0, 14),
+                        Position = UDim2.new(0, GEO.Swatch + 10, 0, GEO.SVH + 10),
+                        Size = UDim2.new(0, 0, 0, GEO.Swatch),
                         BackgroundTransparency = 1,
                         Font = F.Mono,
                         TextSize = 11,
@@ -1920,11 +1930,11 @@ function Reborn:CreateWindow(config)
                 })
                 local hexVal = New("TextLabel", {
                         AnchorPoint = Vector2.new(1, 0),
-                        Position = UDim2.new(1, 0, 0, GEO.SVH + 9 + GEO.HueH + 9),
-                        Size = UDim2.new(0, rnd(math.max(44, measureText("#0070F3", 11, F.Mono))), 0, 14),
+                        Position = UDim2.new(1, 0, 0, GEO.SVH + 10),
+                        Size = UDim2.new(0, rnd(math.max(52, measureText("#0070F3", 12, F.Mono))), 0, GEO.Swatch),
                         BackgroundTransparency = 1,
                         Font = F.Mono,
-                        TextSize = 11,
+                        TextSize = 12,
                         TextColor3 = theme.TextMuted,
                         TextXAlignment = Enum.TextXAlignment.Right,
                         TextTruncate = Enum.TextTruncate.AtEnd,
@@ -1949,10 +1959,11 @@ function Reborn:CreateWindow(config)
                         local color = Color3.fromHSV(h, s, v)
                         local hex = colorToHex(color)
                         svGrad.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromHSV(h, 1, 1))
-                        local svw = GEO.PopW - 20
-                        dot.Position = UDim2.new(0, clamp(rnd(s * svw) - 6, 0, svw - 12), 0, clamp(rnd((1 - v) * GEO.SVH) - 6, 0, GEO.SVH - 12))
-                        hdot.Position = UDim2.new(0, clamp(rnd(h / 360 * svw) - 6, 0, svw - 12), 0, -1)
+                        local svw = GEO.PopW - 20 - GEO.HueW - 10
+                        dot.Position = UDim2.new(0, clamp(rnd(s * svw) - 7, 0, svw - 14), 0, clamp(rnd((1 - v) * GEO.SVH) - 7, 0, GEO.SVH - 14))
+                        hdot.Position = UDim2.new(0, -2, 0, clamp(rnd(h / 360 * GEO.SVH) - 9, 0, GEO.SVH - 18))
                         swatch.BackgroundColor3 = color
+                        preview.BackgroundColor3 = color
                         hexLbl.Text = hex
                         hexVal.Text = hex
                         cp.Hex = hex
@@ -1961,16 +1972,21 @@ function Reborn:CreateWindow(config)
                 end
 
                 local active = nil
+                local calibX, calibY = 0, 0
                 local function padPoint(input)
                         if input.UserInputType == Enum.UserInputType.Touch then
-                                return input.Position.X, input.Position.Y + GuiService:GetGuiInset().Y
+                                local insetY = GuiService:GetGuiInset().Y
+                                return input.Position.X, input.Position.Y + insetY
                         end
-                        local m = UserInputService:GetMouseLocation()
-                        return m.X, m.Y
+                        return input.Position.X + calibX, input.Position.Y + calibY
                 end
                 local function bindPad(el, apply)
                         el.InputBegan:Connect(function(input)
                                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                                        if input.UserInputType ~= Enum.UserInputType.Touch then
+                                                local m = UserInputService:GetMouseLocation()
+                                                calibX, calibY = m.X - input.Position.X, m.Y - input.Position.Y
+                                        end
                                         active = apply
                                         apply(input)
                                 end
@@ -1986,9 +2002,9 @@ function Reborn:CreateWindow(config)
                 end
                 local function applyHue(input)
                         local r, sz = hue.AbsolutePosition, hue.AbsoluteSize
-                        if sz.X < 1 then return end
-                        local lx = padPoint(input)
-                        h = clamp((lx - r.X) / sz.X, 0, 1) * 360
+                        if sz.Y < 1 then return end
+                        local _, ly = padPoint(input)
+                        h = clamp((ly - r.Y) / sz.Y, 0, 1) * 360
                         render(true)
                 end
                 connect(UserInputService.InputChanged, function(input)
@@ -2017,6 +2033,7 @@ function Reborn:CreateWindow(config)
                                 registerPop(row, pop, setOpen, popH, GEO.PopW, true)
                         else
                                 active = nil
+                                calibX, calibY = 0, 0
                                 tween(pop, 0.12, { Position = UDim2.new(0, pop.Position.X.Offset, 0, pop.Position.Y.Offset + 4) })
                                 task.delay(0.14, function()
                                         if not open then pop.Visible = false end
