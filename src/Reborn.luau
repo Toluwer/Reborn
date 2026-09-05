@@ -5,7 +5,7 @@ local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.5.2",
+        Version = "0.6.0",
         NotificationsEnabled = true,
         _windows = {},
 }
@@ -129,14 +129,39 @@ local function list(parent, gap, sortOrder)
         })
 end
 
+local liveTweens = setmetatable({}, { __mode = "kv" })
+
 local function tween(inst, time, props, style, dir)
+        local reg = liveTweens[inst]
+        if reg == nil then
+                reg = {}
+                liveTweens[inst] = reg
+        end
+        for k in pairs(props) do
+                local prev = reg[k]
+                if prev then
+                        prev:Cancel()
+                        reg[k] = nil
+                end
+        end
         local t = TweenService:Create(inst, TweenInfo.new(
                 time,
                 style or Enum.EasingStyle.Quad,
                 dir or Enum.EasingDirection.Out
         ), props)
+        for k in pairs(props) do reg[k] = t end
         t:Play()
         return t
+end
+
+local function killTween(inst, prop)
+        local reg = liveTweens[inst]
+        if reg == nil then return end
+        local t = reg[prop]
+        if t then
+                t:Cancel()
+                reg[prop] = nil
+        end
 end
 
 local function measureText(text, size, font)
@@ -393,12 +418,23 @@ local function buildToastLayer(gui, theme)
         })
         local state = { items = {} }
 
+        local function toastHeight(cfg)
+                local desc = tostring(cfg.Description or "")
+                local lines = 1
+                if desc ~= "" then
+                        local w = measureText(desc, 12)
+                        lines = math.max(1, math.ceil(w / math.max(GEO.ToastW - 39, 40)))
+                end
+                return 22 + math.max(16, 18 + (lines * 15 + 4))
+        end
+
         local function relayout(animate)
                 local y = 0
                 for _, item in ipairs(state.items) do
                         local h = item.toast.AbsoluteSize.Y
+                        if h < 12 then h = item.estH or 46 end
                         if animate then
-                                tween(item.toast, 0.22, { Position = UDim2.new(0, 0, 0, y) })
+                                tween(item.toast, 0.18, { Position = UDim2.new(0, 0, 0, y) })
                         else
                                 item.toast.Position = UDim2.new(0, 0, 0, y)
                         end
@@ -412,10 +448,8 @@ local function buildToastLayer(gui, theme)
                 for i, it in ipairs(state.items) do
                         if it == item then table.remove(state.items, i) break end
                 end
-                tween(item.toast, 0.24, {
-                        Position = UDim2.new(0, GEO.ToastW + 14, 0, item.toast.Position.Y.Offset),
-                })
-                task.delay(0.26, function()
+                tween(item.toast, 0.22, { Position = UDim2.new(0, GEO.ToastW + 18, 0, item.toast.Position.Y.Offset) })
+                task.delay(0.24, function()
                         if item.toast then item.toast:Destroy() end
                 end)
                 relayout(true)
@@ -475,7 +509,7 @@ local function buildToastLayer(gui, theme)
                         ZIndex = 10,
                         Parent = toast,
                 })
-                local item = { toast = toast, closed = false }
+                local item = { toast = toast, closed = false, estH = toastHeight(cfg) }
                 hit.Activated:Connect(function() dismiss(item) end)
                 table.insert(state.items, item)
                 while #state.items > 5 do
@@ -484,7 +518,7 @@ local function buildToastLayer(gui, theme)
                 relayout(false)
                 local targetY = toast.Position.Y.Offset
                 toast.Position = UDim2.new(0, GEO.ToastW + 18, 0, targetY)
-                tween(toast, 0.22, { Position = UDim2.new(0, 0, 0, targetY) })
+                tween(toast, 0.24, { Position = UDim2.new(0, 0, 0, targetY) }, Enum.EasingStyle.Quint)
                 task.defer(function()
                         if not item.closed then relayout(true) end
                 end)
@@ -614,14 +648,18 @@ function Reborn:CreateWindow(config)
 
         local function recenter()
                 if state.dragged or state.closed then return end
+                killTween(windowFrame, "Position")
                 local v = viewportSize()
                 windowFrame.Position = UDim2.new(0, rnd(v.X / 2 - W / 2), 0, rnd(v.Y / 2 - H / 2))
         end
         recenter()
-        windowFrame.Position = UDim2.new(0, windowFrame.Position.X.Offset, 0, windowFrame.Position.Y.Offset + 12)
-        tween(windowFrame, 0.4, {
-                Position = UDim2.new(0, windowFrame.Position.X.Offset, 0, windowFrame.Position.Y.Offset - 12),
-        }, Enum.EasingStyle.Quint)
+        do
+                local tx, ty = windowFrame.Position.X.Offset, windowFrame.Position.Y.Offset
+                windowFrame.Position = UDim2.new(0, tx, 0, ty + 14)
+                tween(windowFrame, 0.38, {
+                        Position = UDim2.new(0, tx, 0, ty),
+                }, Enum.EasingStyle.Quint)
+        end
 
         if camera then
                 connect(camera:GetPropertyChangedSignal("ViewportSize"), function()
@@ -687,19 +725,19 @@ function Reborn:CreateWindow(config)
                 local ic = icon(b, iconName, 18, theme.TextFaint)
                 ic.Position = UDim2.new(0.5, -9, 0.5, -9)
                 b.MouseEnter:Connect(function()
-                        b.BackgroundTransparency = 0
                         if isClose then
                                 b.BackgroundColor3 = theme.Error
-                                b.BackgroundTransparency = 0.88
                                 ic.ImageColor3 = theme.Error
+                                tween(b, 0.12, { BackgroundTransparency = 0.88 })
                         else
                                 b.BackgroundColor3 = theme.RowHover
                                 ic.ImageColor3 = theme.Text
+                                tween(b, 0.12, { BackgroundTransparency = 0 })
                         end
                 end)
                 b.MouseLeave:Connect(function()
-                        b.BackgroundTransparency = 1
                         ic.ImageColor3 = theme.TextFaint
+                        tween(b, 0.12, { BackgroundTransparency = 1 })
                 end)
                 return b, ic
         end
@@ -738,12 +776,12 @@ function Reborn:CreateWindow(config)
         local searchIcon = icon(searchBtn, "search", 18, theme.TextFaint)
         searchIcon.Position = UDim2.new(0.5, -9, 0.5, -9)
         searchBtn.MouseEnter:Connect(function()
-                searchBtn.BackgroundTransparency = 0
-                searchIcon.ImageColor3 = theme.Text
+                tween(searchBtn, 0.12, { BackgroundTransparency = 0 })
+                tween(searchIcon, 0.12, { ImageColor3 = theme.Text })
         end)
         searchBtn.MouseLeave:Connect(function()
-                searchBtn.BackgroundTransparency = 1
-                searchIcon.ImageColor3 = theme.TextFaint
+                tween(searchBtn, 0.12, { BackgroundTransparency = 1 })
+                tween(searchIcon, 0.12, { ImageColor3 = theme.TextFaint })
         end)
         local minBtn, minIcon = captionBtn(GEO.SearchW + 9 + 28 + 9, "minus", false)
         local plusIcon = icon(minBtn, "plus", 18, theme.TextFaint)
@@ -796,7 +834,7 @@ function Reborn:CreateWindow(config)
 
         local launcher = New("Frame", {
                 AnchorPoint = Vector2.new(1, 1),
-                Position = UDim2.new(1, -22, 1, -14),
+                Position = UDim2.new(1, -22, 1, -22),
                 Size = UDim2.new(0, GEO.Launcher, 0, GEO.Launcher),
                 BackgroundColor3 = theme.Overlay,
                 BorderSizePixel = 0,
@@ -817,10 +855,10 @@ function Reborn:CreateWindow(config)
                 })
         end
         launcher.MouseEnter:Connect(function()
-                launcher.BackgroundColor3 = theme.Chip
+                tween(launcher, 0.12, { BackgroundColor3 = theme.Chip })
         end)
         launcher.MouseLeave:Connect(function()
-                launcher.BackgroundColor3 = theme.Overlay
+                tween(launcher, 0.12, { BackgroundColor3 = theme.Overlay })
         end)
 
         local toastLayer = buildToastLayer(gui, theme)
@@ -829,12 +867,14 @@ function Reborn:CreateWindow(config)
         dragZone.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                         state.dragged = true
+                        killTween(windowFrame, "Position")
                         local p = windowFrame.Position
                         dragState = { sx = input.Position.X, sy = input.Position.Y, ox = p.X.Offset, oy = p.Y.Offset }
                 end
         end)
         connect(UserInputService.InputChanged, function(input)
                 if dragState and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                        killTween(windowFrame, "Position")
                         local v = viewportSize()
                         local nx = clamp(dragState.ox + (input.Position.X - dragState.sx), -W + 140, v.X - 140)
                         local ny = clamp(dragState.oy + (input.Position.Y - dragState.sy), 0, v.Y - GEO.Header)
@@ -862,15 +902,16 @@ function Reborn:CreateWindow(config)
         local gripIcon = icon(grip, "grip", 14, theme.TextFaint)
         gripIcon.Position = UDim2.new(0.5, -7, 0.5, -7)
         grip.MouseEnter:Connect(function()
-                gripIcon.ImageColor3 = theme.Text
+                tween(gripIcon, 0.12, { ImageColor3 = theme.Text })
         end)
         grip.MouseLeave:Connect(function()
-                gripIcon.ImageColor3 = theme.TextFaint
+                tween(gripIcon, 0.12, { ImageColor3 = theme.TextFaint })
         end)
         local resizeState = nil
         grip.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                         closeAllPops()
+                        killTween(windowFrame, "Size")
                         resizeState = { sx = input.Position.X, sy = input.Position.Y, w = W, h = H }
                 end
         end)
@@ -909,13 +950,15 @@ function Reborn:CreateWindow(config)
         local function closeWindow()
                 if state.closed then return end
                 state.closed = true
-                tween(windowFrame, 0.16, { Position = UDim2.new(0, windowFrame.Position.X.Offset, 0, windowFrame.Position.Y.Offset + 12) })
-                task.delay(0.18, function()
+                closeAllPops()
+                local px, py = windowFrame.Position.X.Offset, windowFrame.Position.Y.Offset
+                tween(windowFrame, 0.18, { Position = UDim2.new(0, px, 0, py + 14) })
+                task.delay(0.2, function()
                         if state.closed then windowFrame.Visible = false end
                 end)
                 launcher.Visible = true
-                launcher.Position = UDim2.new(1, -22, 1, -6)
-                tween(launcher, 0.18, { Position = UDim2.new(1, -22, 1, -22) })
+                launcher.Position = UDim2.new(1, -22, 1, -4)
+                tween(launcher, 0.2, { Position = UDim2.new(1, -22, 1, -22) }, Enum.EasingStyle.Quint)
         end
 
         minBtn.Activated:Connect(function()
@@ -925,11 +968,13 @@ function Reborn:CreateWindow(config)
         local function reopen()
                 if not state.closed then return end
                 state.closed = false
+                closeAllPops()
                 recenter()
                 windowFrame.Visible = true
-                windowFrame.Position = UDim2.new(0, windowFrame.Position.X.Offset, 0, windowFrame.Position.Y.Offset + 12)
-                tween(windowFrame, 0.2, { Position = UDim2.new(0, windowFrame.Position.X.Offset, 0, windowFrame.Position.Y.Offset - 12) })
-                task.delay(0.16, function()
+                local tx, ty = windowFrame.Position.X.Offset, windowFrame.Position.Y.Offset
+                windowFrame.Position = UDim2.new(0, tx, 0, ty + 14)
+                tween(windowFrame, 0.22, { Position = UDim2.new(0, tx, 0, ty) }, Enum.EasingStyle.Quint)
+                task.delay(0.2, function()
                         if not state.closed then launcher.Visible = false end
                 end)
         end
@@ -942,6 +987,7 @@ function Reborn:CreateWindow(config)
 
         local function applyFilter(q)
                 q = tostring(q or ""):lower()
+                if q ~= "" then closeAllPops() end
                 for _, e in ipairs(state.searchRows) do
                         local match = q == "" or (e.text ~= nil and e.text:lower():find(q, 1, true) ~= nil)
                         e.frame.Visible = match
@@ -1000,12 +1046,12 @@ function Reborn:CreateWindow(config)
                 corner(row, 8)
                 local s = stroke(row, theme.Line)
                 row.MouseEnter:Connect(function()
-                        row.BackgroundTransparency = 0
-                        s.Color = theme.LineStrong
+                        tween(row, 0.12, { BackgroundTransparency = 0 })
+                        tween(s, 0.12, { Color = theme.LineStrong })
                 end)
                 row.MouseLeave:Connect(function()
-                        row.BackgroundTransparency = 1
-                        s.Color = theme.Line
+                        tween(row, 0.12, { BackgroundTransparency = 1 })
+                        tween(s, 0.12, { Color = theme.Line })
                 end)
                 return row, s
         end
@@ -1051,8 +1097,8 @@ function Reborn:CreateWindow(config)
                 end
         end
 
-        local function registerPop(row, pop, setOpen)
-                table.insert(state.openPops, { row = row, pop = pop, close = function() setOpen(false) end })
+        local function registerPop(row, pop, setOpen, popH, popW, alignRight)
+                table.insert(state.openPops, { row = row, pop = pop, popH = popH, popW = popW, alignRight = alignRight and true or false, close = function() setOpen(false) end })
         end
         local function unregisterPop(pop)
                 for i, p in ipairs(state.openPops) do
@@ -1063,7 +1109,28 @@ function Reborn:CreateWindow(config)
                 end
         end
 
-        content:GetPropertyChangedSignal("CanvasPosition"):Connect(function() closeAllPops() end)
+        local lastCanvasY = 0
+        content:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+                local cy = content.CanvasPosition.Y
+                local d = cy - lastCanvasY
+                lastCanvasY = cy
+                if d == 0 then return end
+                local wp = windowFrame.AbsolutePosition
+                local wb = wp.Y + windowFrame.AbsoluteSize.Y
+                local topMin = wp.Y + GEO.Header + 8
+                for i = #state.openPops, 1, -1 do
+                        local p = state.openPops[i]
+                        local pos = p.pop.Position
+                        local ny = pos.Y.Offset - d
+                        local pb = ny + (p.popH or 0)
+                        if pb < topMin + 4 or ny > wb - 12 then
+                                p.close()
+                        else
+                                killTween(p.pop, "Position")
+                                p.pop.Position = UDim2.new(0, pos.X.Offset, 0, ny)
+                        end
+                end
+        end)
         dragZone.InputBegan:Connect(function() closeAllPops() end)
 
         local confirmActive = false
@@ -1073,8 +1140,8 @@ function Reborn:CreateWindow(config)
                 if not confirmActive then return end
                 confirmActive = false
                 tween(scrim, 0.15, { BackgroundTransparency = 1 })
-                tween(card, 0.15, { Position = UDim2.new(0.5, 0, 0.5, 6) })
-                task.delay(0.17, function()
+                tween(card, 0.15, { Position = UDim2.new(0.5, 0, 0.5, 8) })
+                task.delay(0.2, function()
                         if not confirmActive then
                                 card.Visible = false
                                 scrim.Visible = false
@@ -1085,8 +1152,9 @@ function Reborn:CreateWindow(config)
         local function unloadNow()
                 hideConfirm()
                 closeAllPops()
-                tween(windowFrame, 0.16, { Position = UDim2.new(0, windowFrame.Position.X.Offset, 0, windowFrame.Position.Y.Offset + 12) })
-                task.delay(0.18, function()
+                local px, py = windowFrame.Position.X.Offset, windowFrame.Position.Y.Offset
+                tween(windowFrame, 0.18, { Position = UDim2.new(0, px, 0, py + 14) })
+                task.delay(0.2, function()
                         if Window then pcall(function() Window:Destroy() end) end
                 end)
         end
@@ -1194,9 +1262,9 @@ function Reborn:CreateWindow(config)
                 scrim.Visible = true
                 card.Visible = true
                 scrim.BackgroundTransparency = 1
-                card.Position = UDim2.new(0.5, 0, 0.5, 8)
+                card.Position = UDim2.new(0.5, 0, 0.5, 10)
                 tween(scrim, 0.16, { BackgroundTransparency = 0.42 })
-                tween(card, 0.18, { Position = UDim2.new(0.5, 0, 0.5, 0) })
+                tween(card, 0.18, { Position = UDim2.new(0.5, 0, 0.5, 0) }, Enum.EasingStyle.Quint)
         end
 
         closeBtn.Activated:Connect(showConfirm)
@@ -1257,11 +1325,13 @@ function Reborn:CreateWindow(config)
                         local nx = value and (GEO.SwitchW - GEO.Knob - 3) or 3
                         if instant then
                                 knob.Position = UDim2.new(0, nx, 0, 3)
+                                track.BackgroundColor3 = value and theme.Accent or theme.ToggleOff
+                                ts.Color = value and theme.Accent or theme.LineStrong
                         else
-                                tween(knob, 0.18, { Position = UDim2.new(0, nx, 0, 3) }, Enum.EasingStyle.Quad)
+                                tween(knob, 0.16, { Position = UDim2.new(0, nx, 0, 3) })
+                                tween(track, 0.16, { BackgroundColor3 = value and theme.Accent or theme.ToggleOff })
+                                tween(ts, 0.16, { Color = value and theme.Accent or theme.LineStrong })
                         end
-                        track.BackgroundColor3 = value and theme.Accent or theme.ToggleOff
-                        ts.Color = value and theme.Accent or theme.LineStrong
                         tog.Value = value
                         if fire and cfg.Callback then cfg.Callback(value) end
                 end
@@ -1303,13 +1373,13 @@ function Reborn:CreateWindow(config)
                 local val = New("TextLabel", {
                         AnchorPoint = Vector2.new(1, 0),
                         Position = UDim2.new(1, 0, 0, 0),
-                        Size = UDim2.new(0, 0, 1, 0),
-                        AutomaticSize = Enum.AutomaticSize.X,
+                        Size = UDim2.new(0, 74, 1, 0),
                         BackgroundTransparency = 1,
                         Font = F.Medium,
                         TextSize = 12,
                         TextColor3 = theme.TextMuted,
                         TextXAlignment = Enum.TextXAlignment.Right,
+                        TextTruncate = Enum.TextTruncate.AtEnd,
                         Text = "",
                         Parent = top,
                 })
@@ -1484,13 +1554,13 @@ function Reborn:CreateWindow(config)
                                 local x, y = mountPop(row, pop, popH, row.AbsoluteSize.X)
                                 listScroll.CanvasPosition = Vector2.new(0, 0)
                                 pop.Visible = true
-                                pop.Position = UDim2.new(0, x, 0, y + 4)
-                                tween(pop, 0.16, { Position = UDim2.new(0, x, 0, y) })
+                                pop.Position = UDim2.new(0, x, 0, y + 6)
+                                tween(pop, 0.15, { Position = UDim2.new(0, x, 0, y) }, Enum.EasingStyle.Quint)
                                 tween(chev, 0.18, { Rotation = 180 })
-                                registerPop(row, pop, setOpen)
+                                registerPop(row, pop, setOpen, popH)
                         else
-                                tween(pop, 0.14, { Position = UDim2.new(0, pop.Position.X.Offset, 0, pop.Position.Y.Offset + 4) })
-                                task.delay(0.16, function()
+                                tween(pop, 0.12, { Position = UDim2.new(0, pop.Position.X.Offset, 0, pop.Position.Y.Offset + 4) })
+                                task.delay(0.14, function()
                                         if not dd._open then pop.Visible = false end
                                 end)
                                 tween(chev, 0.18, { Rotation = 0 })
@@ -1528,12 +1598,12 @@ function Reborn:CreateWindow(config)
                         chk.Visible = false
 
                         ob.MouseEnter:Connect(function()
-                                ob.BackgroundTransparency = 0
-                                ot.TextColor3 = theme.Text
+                                tween(ob, 0.1, { BackgroundTransparency = 0 })
+                                tween(ot, 0.1, { TextColor3 = theme.Text })
                         end)
                         ob.MouseLeave:Connect(function()
-                                ob.BackgroundTransparency = 1
-                                ot.TextColor3 = theme.TextMuted
+                                tween(ob, 0.1, { BackgroundTransparency = 1 })
+                                tween(ot, 0.1, { TextColor3 = theme.TextMuted })
                         end)
                         ob.Activated:Connect(function()
                                 dd.Value = otext
@@ -1647,6 +1717,8 @@ function Reborn:CreateWindow(config)
                                 pulseTween:Cancel()
                                 pulseTween = nil
                         end
+                        killTween(cs, "Color")
+                        killTween(txt, "TextColor3")
                         cs.Transparency = 0
                         cs.Color = theme.LineStrong
                         txt.TextColor3 = theme.TextMuted
@@ -1673,8 +1745,8 @@ function Reborn:CreateWindow(config)
                         kb._commit = commitBind
                         kb._prev = txt.Text
                         txt.Text = "· · ·"
-                        cs.Color = theme.Accent
-                        txt.TextColor3 = theme.Accent
+                        tween(cs, 0.12, { Color = theme.Accent })
+                        tween(txt, 0.12, { TextColor3 = theme.Accent })
                         pulseTween = TweenService:Create(cs, TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, -1, true), { Transparency = 0.6 })
                         pulseTween:Play()
                 end
@@ -1707,34 +1779,38 @@ function Reborn:CreateWindow(config)
         local function addColorPicker(section, cfg)
                 cfg = cfg or {}
                 local row = makeRow(section, GEO.RowH)
-                rowLabel(row, cfg.Text, 108)
+                rowLabel(row, cfg.Text, 118)
 
+                local hexW = rnd(math.max(44, measureText("#0070F3", 12, F.Mono)))
                 local trigger = New("TextButton", {
                         AnchorPoint = Vector2.new(1, 0.5),
                         Position = UDim2.new(1, -GEO.RowPad, 0.5, 0),
-                        Size = UDim2.new(0, 0, 0, GEO.Swatch),
-                        AutomaticSize = Enum.AutomaticSize.X,
+                        Size = UDim2.new(0, hexW + 9 + GEO.Swatch, 0, GEO.Swatch),
                         BackgroundTransparency = 1,
                         Text = "",
                         AutoButtonColor = false,
                         ZIndex = 5,
                         Parent = row,
                 })
-                list(trigger, 9)
                 local hexLbl = New("TextLabel", {
-                        Size = UDim2.new(0, 0, 1, 0),
-                        AutomaticSize = Enum.AutomaticSize.X,
+                        Size = UDim2.new(0, hexW, 1, 0),
                         BackgroundTransparency = 1,
                         Font = F.Mono,
                         TextSize = 12,
                         TextColor3 = theme.TextMuted,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        TextTruncate = Enum.TextTruncate.AtEnd,
                         Text = "#0070F3",
+                        ZIndex = 6,
                         Parent = trigger,
                 })
                 local swatch = New("Frame", {
+                        AnchorPoint = Vector2.new(1, 0.5),
+                        Position = UDim2.new(1, 0, 0.5, 0),
                         Size = UDim2.new(0, GEO.Swatch, 0, GEO.Swatch),
                         BackgroundColor3 = theme.Accent,
                         BorderSizePixel = 0,
+                        ZIndex = 6,
                         Parent = trigger,
                 })
                 corner(swatch, 6)
@@ -1845,13 +1921,13 @@ function Reborn:CreateWindow(config)
                 local hexVal = New("TextLabel", {
                         AnchorPoint = Vector2.new(1, 0),
                         Position = UDim2.new(1, 0, 0, GEO.SVH + 9 + GEO.HueH + 9),
-                        Size = UDim2.new(0, 0, 0, 14),
-                        AutomaticSize = Enum.AutomaticSize.X,
+                        Size = UDim2.new(0, rnd(math.max(44, measureText("#0070F3", 11, F.Mono))), 0, 14),
                         BackgroundTransparency = 1,
                         Font = F.Mono,
                         TextSize = 11,
                         TextColor3 = theme.TextMuted,
                         TextXAlignment = Enum.TextXAlignment.Right,
+                        TextTruncate = Enum.TextTruncate.AtEnd,
                         Text = "#0070F3",
                         Parent = pop,
                 })
@@ -1873,8 +1949,7 @@ function Reborn:CreateWindow(config)
                         local color = Color3.fromHSV(h, s, v)
                         local hex = colorToHex(color)
                         svGrad.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromHSV(h, 1, 1))
-                        local svw = sv.AbsoluteSize.X
-                        if svw < 12 then svw = GEO.PopW - 20 end
+                        local svw = GEO.PopW - 20
                         dot.Position = UDim2.new(0, clamp(rnd(s * svw) - 6, 0, svw - 12), 0, clamp(rnd((1 - v) * GEO.SVH) - 6, 0, GEO.SVH - 12))
                         hdot.Position = UDim2.new(0, clamp(rnd(h / 360 * svw) - 6, 0, svw - 12), 0, -1)
                         swatch.BackgroundColor3 = color
@@ -1937,12 +2012,13 @@ function Reborn:CreateWindow(config)
                                 closeAllPops(pop)
                                 local x, y = mountPop(row, pop, popH, GEO.PopW, true)
                                 pop.Visible = true
-                                pop.Position = UDim2.new(0, x, 0, y + 4)
-                                tween(pop, 0.16, { Position = UDim2.new(0, x, 0, y) })
-                                registerPop(row, pop, setOpen)
+                                pop.Position = UDim2.new(0, x, 0, y + 6)
+                                tween(pop, 0.15, { Position = UDim2.new(0, x, 0, y) }, Enum.EasingStyle.Quint)
+                                registerPop(row, pop, setOpen, popH, GEO.PopW, true)
                         else
-                                tween(pop, 0.14, { Position = UDim2.new(0, pop.Position.X.Offset, 0, pop.Position.Y.Offset + 4) })
-                                task.delay(0.16, function()
+                                active = nil
+                                tween(pop, 0.12, { Position = UDim2.new(0, pop.Position.X.Offset, 0, pop.Position.Y.Offset + 4) })
+                                task.delay(0.14, function()
                                         if not open then pop.Visible = false end
                                 end)
                                 unregisterPop(pop)
@@ -1990,10 +2066,10 @@ function Reborn:CreateWindow(config)
                 padding(box, 0, 10, 0, 10)
 
                 box.Focused:Connect(function()
-                        bs.Color = theme.Accent
+                        tween(bs, 0.12, { Color = theme.Accent })
                 end)
                 box.FocusLost:Connect(function(enter)
-                        bs.Color = theme.LineStrong
+                        tween(bs, 0.12, { Color = theme.LineStrong })
                         if cfg.Callback then cfg.Callback(box.Text, enter and true or false) end
                 end)
                 registerSearch(row, cfg.Text, section)
@@ -2039,14 +2115,14 @@ function Reborn:CreateWindow(config)
                         btn.TextColor3 = theme.TextMuted
                         s = stroke(btn, theme.Line)
                         btn.MouseEnter:Connect(function()
-                                btn.BackgroundTransparency = 0
-                                btn.TextColor3 = theme.Text
-                                s.Color = theme.LineStrong
+                                tween(btn, 0.13, { BackgroundTransparency = 0 })
+                                tween(btn, 0.13, { TextColor3 = theme.Text })
+                                tween(s, 0.13, { Color = theme.LineStrong })
                         end)
                         btn.MouseLeave:Connect(function()
-                                btn.BackgroundTransparency = 1
-                                btn.TextColor3 = theme.TextMuted
-                                s.Color = theme.Line
+                                tween(btn, 0.13, { BackgroundTransparency = 1 })
+                                tween(btn, 0.13, { TextColor3 = theme.TextMuted })
+                                tween(s, 0.13, { Color = theme.Line })
                         end)
                 end
                 btn.Activated:Connect(function()
@@ -2217,26 +2293,27 @@ function Reborn:CreateWindow(config)
                 }
 
                 local function setActive(active)
-                        btn.BackgroundTransparency = active and 0 or 1
-                        btn.TextColor3 = active and theme.Text or theme.TextMuted
+                        if ic then tween(ic, 0.12, { ImageColor3 = active and theme.Text or theme.TextMuted }) end
+                        tween(btn, 0.12, { BackgroundTransparency = active and 0 or 1 })
+                        tween(btn, 0.12, { TextColor3 = active and theme.Text or theme.TextMuted })
                         btn.Font = active and F.Semibold or F.Medium
-                        if ic then ic.ImageColor3 = active and theme.Text or theme.TextMuted end
                 end
                 btn.MouseEnter:Connect(function()
                         if not page.Visible then
-                                btn.BackgroundTransparency = 0
-                                btn.TextColor3 = theme.Text
-                                if ic then ic.ImageColor3 = theme.Text end
+                                tween(btn, 0.12, { BackgroundTransparency = 0 })
+                                tween(btn, 0.12, { TextColor3 = theme.Text })
+                                if ic then tween(ic, 0.12, { ImageColor3 = theme.Text }) end
                         end
                 end)
                 btn.MouseLeave:Connect(function()
                         if not page.Visible then
-                                btn.BackgroundTransparency = 1
-                                btn.TextColor3 = theme.TextMuted
-                                if ic then ic.ImageColor3 = theme.TextMuted end
+                                tween(btn, 0.12, { BackgroundTransparency = 1 })
+                                tween(btn, 0.12, { TextColor3 = theme.TextMuted })
+                                if ic then tween(ic, 0.12, { ImageColor3 = theme.TextMuted }) end
                         end
                 end)
                 btn.Activated:Connect(function()
+                        closeAllPops()
                         for _, t in ipairs(state.tabs) do
                                 t.Page.Visible = (t == tab)
                                 t._setActive(false)
