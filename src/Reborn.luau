@@ -5,7 +5,7 @@ local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.5.1",
+        Version = "0.5.2",
         NotificationsEnabled = true,
         _windows = {},
 }
@@ -877,8 +877,12 @@ function Reborn:CreateWindow(config)
         connect(UserInputService.InputChanged, function(input)
                 if resizeState and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
                         local v = viewportSize()
-                        W = math.floor(clamp(resizeState.w + (input.Position.X - resizeState.sx), 540, v.X * 0.96) / 2) * 2
-                        H = math.floor(clamp(resizeState.h + (input.Position.Y - resizeState.sy), 360, v.Y * 0.88) / 2) * 2
+                        local maxX = v.X * 0.96
+                        local minX = math.min(540, maxX)
+                        local maxY = v.Y * 0.88
+                        local minY = math.min(360, maxY)
+                        W = math.floor(clamp(resizeState.w + (input.Position.X - resizeState.sx), minX, maxX) / 2) * 2
+                        H = math.floor(clamp(resizeState.h + (input.Position.Y - resizeState.sy), minY, maxY) / 2) * 2
                         windowFrame.Size = UDim2.new(0, W, 0, H)
                 end
         end)
