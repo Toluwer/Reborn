@@ -1,11 +1,10 @@
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local TextService = game:GetService("TextService")
-local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.7.0",
+        Version = "0.7.1",
         NotificationsEnabled = true,
         _windows = {},
 }
@@ -1972,21 +1971,9 @@ function Reborn:CreateWindow(config)
                 end
 
                 local active = nil
-                local calibX, calibY = 0, 0
-                local function padPoint(input)
-                        if input.UserInputType == Enum.UserInputType.Touch then
-                                local insetY = GuiService:GetGuiInset().Y
-                                return input.Position.X, input.Position.Y + insetY
-                        end
-                        return input.Position.X + calibX, input.Position.Y + calibY
-                end
                 local function bindPad(el, apply)
                         el.InputBegan:Connect(function(input)
                                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                                        if input.UserInputType ~= Enum.UserInputType.Touch then
-                                                local m = UserInputService:GetMouseLocation()
-                                                calibX, calibY = m.X - input.Position.X, m.Y - input.Position.Y
-                                        end
                                         active = apply
                                         apply(input)
                                 end
@@ -1995,16 +1982,14 @@ function Reborn:CreateWindow(config)
                 local function applySV(input)
                         local r, sz = sv.AbsolutePosition, sv.AbsoluteSize
                         if sz.X < 1 or sz.Y < 1 then return end
-                        local lx, ly = padPoint(input)
-                        s = clamp((lx - r.X) / sz.X, 0, 1)
-                        v = 1 - clamp((ly - r.Y) / sz.Y, 0, 1)
+                        s = clamp((input.Position.X - r.X) / sz.X, 0, 1)
+                        v = 1 - clamp((input.Position.Y - r.Y) / sz.Y, 0, 1)
                         render(true)
                 end
                 local function applyHue(input)
                         local r, sz = hue.AbsolutePosition, hue.AbsoluteSize
                         if sz.Y < 1 then return end
-                        local _, ly = padPoint(input)
-                        h = clamp((ly - r.Y) / sz.Y, 0, 1) * 360
+                        h = clamp((input.Position.Y - r.Y) / sz.Y, 0, 1) * 360
                         render(true)
                 end
                 connect(UserInputService.InputChanged, function(input)
@@ -2033,7 +2018,6 @@ function Reborn:CreateWindow(config)
                                 registerPop(row, pop, setOpen, popH, GEO.PopW, true)
                         else
                                 active = nil
-                                calibX, calibY = 0, 0
                                 tween(pop, 0.12, { Position = UDim2.new(0, pop.Position.X.Offset, 0, pop.Position.Y.Offset + 4) })
                                 task.delay(0.14, function()
                                         if not open then pop.Visible = false end
@@ -2410,13 +2394,7 @@ function Reborn:CreateWindow(config)
                         end
                 end
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                        local m
-                        if input.UserInputType == Enum.UserInputType.Touch then
-                                local insetY = GuiService:GetGuiInset().Y
-                                m = Vector2.new(input.Position.X, input.Position.Y + insetY)
-                        else
-                                m = UserInputService:GetMouseLocation()
-                        end
+                        local m = Vector2.new(input.Position.X, input.Position.Y)
                         for i = #state.openPops, 1, -1 do
                                 local p = state.openPops[i]
                                 if not inRect(p.row, m) and not inRect(p.pop, m) then
