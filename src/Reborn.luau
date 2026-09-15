@@ -4,7 +4,7 @@ local TextService = game:GetService("TextService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.7.1",
+        Version = "0.7.2",
         NotificationsEnabled = true,
         _windows = {},
 }
@@ -1960,7 +1960,7 @@ function Reborn:CreateWindow(config)
                         svGrad.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromHSV(h, 1, 1))
                         local svw = GEO.PopW - 20 - GEO.HueW - 10
                         dot.Position = UDim2.new(0, clamp(rnd(s * svw) - 7, 0, svw - 14), 0, clamp(rnd((1 - v) * GEO.SVH) - 7, 0, GEO.SVH - 14))
-                        hdot.Position = UDim2.new(0, -2, 0, clamp(rnd(h / 360 * GEO.SVH) - 9, 0, GEO.SVH - 18))
+                        hdot.Position = UDim2.new(0, -2, 0, clamp(rnd(h * GEO.SVH) - 9, 0, GEO.SVH - 18))
                         swatch.BackgroundColor3 = color
                         preview.BackgroundColor3 = color
                         hexLbl.Text = hex
@@ -1989,7 +1989,7 @@ function Reborn:CreateWindow(config)
                 local function applyHue(input)
                         local r, sz = hue.AbsolutePosition, hue.AbsoluteSize
                         if sz.Y < 1 then return end
-                        h = clamp((input.Position.Y - r.Y) / sz.Y, 0, 1) * 360
+                        h = clamp((input.Position.Y - r.Y) / sz.Y, 0, 1)
                         render(true)
                 end
                 connect(UserInputService.InputChanged, function(input)
