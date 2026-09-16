@@ -4,7 +4,7 @@ local TextService = game:GetService("TextService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.7.2",
+        Version = "0.8.0",
         NotificationsEnabled = true,
         _windows = {},
 }
@@ -49,7 +49,7 @@ local GEO = {
         WinBtnH      = 36,
         SearchW      = 150,
         SearchH      = 32,
-        Sidebar      = 155,
+        Sidebar      = 156,
         TabH         = 34,
         ContentPadT  = 16,
         ContentPadS  = 18,
@@ -62,9 +62,9 @@ local GEO = {
         SwitchH      = 24,
         Knob         = 18,
         SliderH      = 61,
-        SliderTrackH = 17,
-        RailH        = 5,
-        HandleD      = 13,
+        SliderTrackH = 18,
+        RailH        = 6,
+        HandleD      = 14,
         OptH         = 30,
         ChipH        = 22,
         ChipMinW     = 46,
@@ -637,13 +637,21 @@ function Reborn:CreateWindow(config)
         local windowFrame = New("Frame", {
                 Name = randomName(),
                 Size = UDim2.new(0, W, 0, H),
-                BackgroundColor3 = theme.Surface,
+                BackgroundColor3 = theme.LineStrong,
                 BorderSizePixel = 0,
                 ClipsDescendants = true,
                 Parent = gui,
         })
         corner(windowFrame, GEO.WindowRadius)
-        stroke(windowFrame, theme.LineStrong)
+        local windowFace = New("Frame", {
+                Position = UDim2.new(0, 1, 0, 1),
+                Size = UDim2.new(1, -2, 1, -2),
+                BackgroundColor3 = theme.Surface,
+                BorderSizePixel = 0,
+                ClipsDescendants = true,
+                Parent = windowFrame,
+        })
+        corner(windowFace, GEO.WindowRadius - 1)
 
         local function recenter()
                 if state.dragged or state.closed then return end
@@ -671,7 +679,7 @@ function Reborn:CreateWindow(config)
                 BackgroundTransparency = 1,
                 BorderSizePixel = 0,
                 ZIndex = 20,
-                Parent = windowFrame,
+                Parent = windowFace,
         })
         New("Frame", {
                 Position = UDim2.new(0, 0, 1, -1),
@@ -792,7 +800,7 @@ function Reborn:CreateWindow(config)
                 Position = UDim2.new(0, 0, 0, GEO.Header),
                 Size = UDim2.new(1, 0, 1, -GEO.Header),
                 BackgroundTransparency = 1,
-                Parent = windowFrame,
+                Parent = windowFace,
         })
 
         local sidebar = New("Frame", {
@@ -896,7 +904,7 @@ function Reborn:CreateWindow(config)
                 Text = "",
                 AutoButtonColor = false,
                 ZIndex = 25,
-                Parent = windowFrame,
+                Parent = windowFace,
         })
         local gripIcon = icon(grip, "grip", 14, theme.TextFaint)
         gripIcon.Position = UDim2.new(0.5, -7, 0.5, -7)
@@ -1171,20 +1179,27 @@ function Reborn:CreateWindow(config)
                                 BorderSizePixel = 0,
                                 ZIndex = 30,
                                 Visible = false,
-                                Parent = windowFrame,
+                                Parent = windowFace,
                         })
                         card = New("Frame", {
                                 AnchorPoint = Vector2.new(0.5, 0.5),
                                 Position = UDim2.new(0.5, 0, 0.5, 0),
                                 Size = UDim2.new(0, 420, 0, 156),
-                                BackgroundColor3 = theme.Overlay,
+                                BackgroundColor3 = theme.LineStrong,
                                 BorderSizePixel = 0,
                                 Visible = false,
                                 ZIndex = 31,
-                                Parent = windowFrame,
+                                Parent = windowFace,
                         })
                         corner(card, 8)
-                        stroke(card, theme.LineStrong)
+                        local cardFace = New("Frame", {
+                                Position = UDim2.new(0, 1, 0, 1),
+                                Size = UDim2.new(1, -2, 1, -2),
+                                BackgroundColor3 = theme.Overlay,
+                                BorderSizePixel = 0,
+                                Parent = card,
+                        })
+                        corner(cardFace, 7)
                         New("TextLabel", {
                                 Position = UDim2.new(0, 20, 0, 20),
                                 Size = UDim2.new(1, -40, 0, 16),
@@ -1194,7 +1209,7 @@ function Reborn:CreateWindow(config)
                                 TextColor3 = theme.Text,
                                 TextXAlignment = Enum.TextXAlignment.Left,
                                 Text = "Close UI",
-                                Parent = card,
+                                Parent = cardFace,
                         })
                         New("TextLabel", {
                                 Position = UDim2.new(0, 20, 0, 44),
@@ -1207,7 +1222,7 @@ function Reborn:CreateWindow(config)
                                 TextYAlignment = Enum.TextYAlignment.Top,
                                 TextWrapped = true,
                                 Text = "Are you sure you want to close the UI? Reborn will be completely unloaded.",
-                                Parent = card,
+                                Parent = cardFace,
                         })
                         local cancelB = New("TextButton", {
                                 Position = UDim2.new(0, 24, 0, 100),
@@ -1220,7 +1235,7 @@ function Reborn:CreateWindow(config)
                                 TextColor3 = theme.TextMuted,
                                 AutoButtonColor = false,
                                 BorderSizePixel = 0,
-                                Parent = card,
+                                Parent = cardFace,
                         })
                         corner(cancelB, 6)
                         local cbs = stroke(cancelB, theme.Line)
@@ -1234,7 +1249,7 @@ function Reborn:CreateWindow(config)
                                 TextColor3 = Color3.new(1, 1, 1),
                                 AutoButtonColor = false,
                                 BorderSizePixel = 0,
-                                Parent = card,
+                                Parent = cardFace,
                         })
                         corner(closeB, 6)
                         cancelB.MouseEnter:Connect(function()
@@ -1392,35 +1407,40 @@ function Reborn:CreateWindow(config)
                         Parent = row,
                 })
                 local rail = New("Frame", {
-                        Position = UDim2.new(0, 0, 0, 6),
+                        Position = UDim2.new(0, 0, 0, (GEO.SliderTrackH - GEO.RailH) / 2),
                         Size = UDim2.new(1, 0, 0, GEO.RailH),
                         BackgroundColor3 = theme.LineStrong,
                         BorderSizePixel = 0,
                         Parent = track,
                 })
-                corner(rail, 3)
+                corner(rail, GEO.RailH / 2)
                 local fill = New("Frame", {
-                        Position = UDim2.new(0, 0, 0, 6),
+                        Position = UDim2.new(0, 0, 0, (GEO.SliderTrackH - GEO.RailH) / 2),
                         Size = UDim2.new(0, 0, 0, GEO.RailH),
                         BackgroundColor3 = theme.Accent,
                         BorderSizePixel = 0,
                         Parent = track,
                 })
-                corner(fill, 3)
+                corner(fill, GEO.RailH / 2)
                 local handle = New("Frame", {
-                        Position = UDim2.new(0, 0, 0, 2),
+                        Position = UDim2.new(0, 0, 0, (GEO.SliderTrackH - GEO.HandleD) / 2),
                         Size = UDim2.new(0, GEO.HandleD, 0, GEO.HandleD),
                         BackgroundColor3 = theme.Handle,
                         BorderSizePixel = 0,
                         ZIndex = 2,
                         Parent = track,
                 })
-                corner(handle, 7)
+                corner(handle, GEO.HandleD / 2)
 
                 local min = cfg.Min or 0
                 local max = cfg.Max or 100
                 if max <= min then max = min + 1 end
-                local value = clamp(math.floor(cfg.Value or min), min, max)
+                local step = tonumber(cfg.Step) or 1
+                if step <= 0 then step = 1 end
+                local function snap(raw)
+                        return clamp(min + rnd((raw - min) / step) * step, min, max)
+                end
+                local value = snap(cfg.Value or min)
                 local suffix = cfg.Suffix or ""
                 local sld = { Value = value }
 
@@ -1433,7 +1453,7 @@ function Reborn:CreateWindow(config)
                         local p = (value - min) / (max - min)
                         local px = rnd(p * tw)
                         fill.Size = UDim2.new(0, px, 0, GEO.RailH)
-                        handle.Position = UDim2.new(0, clamp(px - 6, 0, tw - GEO.HandleD), 0, 2)
+                        handle.Position = UDim2.new(0, clamp(px - GEO.HandleD / 2, 0, tw - GEO.HandleD), 0, (GEO.SliderTrackH - GEO.HandleD) / 2)
                         val.Text = tostring(value) .. suffix
                         sld.Value = value
                 end
@@ -1445,7 +1465,7 @@ function Reborn:CreateWindow(config)
                         local tw = track.AbsoluteSize.X
                         if tw < 1 then return end
                         local p = clamp((x - track.AbsolutePosition.X) / tw, 0, 1)
-                        value = clamp(rnd(min + (max - min) * p), min, max)
+                        value = snap(min + (max - min) * p)
                         render()
                         if cfg.Callback then cfg.Callback(value) end
                 end
@@ -1468,7 +1488,8 @@ function Reborn:CreateWindow(config)
                 registerSearch(row, cfg.Text, section)
 
                 function sld:Set(v, fire)
-                        value = clamp(math.floor(v), min, max)
+                        value = snap(tonumber(v) or min)
+                        sld.Value = value
                         render()
                         if fire and cfg.Callback then cfg.Callback(value) end
                 end
@@ -1504,14 +1525,21 @@ function Reborn:CreateWindow(config)
                 local pop = New("Frame", {
                         Position = UDim2.new(0, 0, 1, 6),
                         Size = UDim2.new(1, 0, 0, popH),
-                        BackgroundColor3 = theme.Overlay,
+                        BackgroundColor3 = theme.LineStrong,
                         BorderSizePixel = 0,
                         Visible = false,
                         ZIndex = 25,
                         Parent = row,
                 })
                 corner(pop, 8)
-                stroke(pop, theme.LineStrong)
+                local popFace = New("Frame", {
+                        Position = UDim2.new(0, 1, 0, 1),
+                        Size = UDim2.new(1, -2, 1, -2),
+                        BackgroundColor3 = theme.Overlay,
+                        BorderSizePixel = 0,
+                        Parent = pop,
+                })
+                corner(popFace, 7)
                 local listScroll = New("ScrollingFrame", {
                         Position = UDim2.new(0, 5, 0, 5),
                         Size = UDim2.new(1, -10, 1, -10),
@@ -1522,7 +1550,7 @@ function Reborn:CreateWindow(config)
                         ScrollingDirection = Enum.ScrollingDirection.Y,
                         CanvasSize = UDim2.new(0, 0, 0, 0),
                         AutomaticCanvasSize = Enum.AutomaticSize.Y,
-                        Parent = pop,
+                        Parent = popFace,
                 })
                 list(listScroll, 0)
                 if #options == 0 then
@@ -1820,21 +1848,28 @@ function Reborn:CreateWindow(config)
                         AnchorPoint = Vector2.new(1, 0),
                         Position = UDim2.new(1, -GEO.RowPad, 0, GEO.RowH + 6),
                         Size = UDim2.new(0, GEO.PopW, 0, popH),
-                        BackgroundColor3 = theme.Overlay,
+                        BackgroundColor3 = theme.LineStrong,
                         BorderSizePixel = 0,
                         Visible = false,
                         ZIndex = 25,
                         Parent = row,
                 })
                 corner(pop, 8)
-                stroke(pop, theme.LineStrong)
-                padding(pop, 10, 10, 10, 10)
+                local popFace = New("Frame", {
+                        Position = UDim2.new(0, 1, 0, 1),
+                        Size = UDim2.new(1, -2, 1, -2),
+                        BackgroundColor3 = theme.Overlay,
+                        BorderSizePixel = 0,
+                        Parent = pop,
+                })
+                corner(popFace, 7)
+                padding(popFace, 10, 10, 10, 10)
 
                 local sv = New("Frame", {
                         Size = UDim2.new(1, -(GEO.HueW + 10), 0, GEO.SVH),
                         BackgroundColor3 = Color3.new(0, 0, 0),
                         BorderSizePixel = 0,
-                        Parent = pop,
+                        Parent = popFace,
                 })
                 corner(sv, 8)
                 local svHue = New("Frame", {
@@ -1880,7 +1915,7 @@ function Reborn:CreateWindow(config)
                         Size = UDim2.new(0, GEO.HueW, 0, GEO.SVH),
                         BackgroundColor3 = Color3.new(1, 1, 1),
                         BorderSizePixel = 0,
-                        Parent = pop,
+                        Parent = popFace,
                 })
                 corner(hue, 7)
                 New("UIGradient", {
@@ -1912,7 +1947,7 @@ function Reborn:CreateWindow(config)
                         Size = UDim2.new(0, GEO.Swatch, 0, GEO.Swatch),
                         BackgroundColor3 = theme.Accent,
                         BorderSizePixel = 0,
-                        Parent = pop,
+                        Parent = popFace,
                 })
                 corner(preview, 6)
                 stroke(preview, theme.LineStrong)
@@ -1925,7 +1960,7 @@ function Reborn:CreateWindow(config)
                         TextColor3 = theme.TextFaint,
                         TextXAlignment = Enum.TextXAlignment.Left,
                         Text = "HEX",
-                        Parent = pop,
+                        Parent = popFace,
                 })
                 local hexVal = New("TextLabel", {
                         AnchorPoint = Vector2.new(1, 0),
@@ -1938,7 +1973,7 @@ function Reborn:CreateWindow(config)
                         TextXAlignment = Enum.TextXAlignment.Right,
                         TextTruncate = Enum.TextTruncate.AtEnd,
                         Text = "#0070F3",
-                        Parent = pop,
+                        Parent = popFace,
                 })
 
                 local startColor
@@ -1958,7 +1993,7 @@ function Reborn:CreateWindow(config)
                         local color = Color3.fromHSV(h, s, v)
                         local hex = colorToHex(color)
                         svGrad.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromHSV(h, 1, 1))
-                        local svw = GEO.PopW - 20 - GEO.HueW - 10
+                        local svw = GEO.PopW - 22 - GEO.HueW - 10
                         dot.Position = UDim2.new(0, clamp(rnd(s * svw) - 7, 0, svw - 14), 0, clamp(rnd((1 - v) * GEO.SVH) - 7, 0, GEO.SVH - 14))
                         hdot.Position = UDim2.new(0, -2, 0, clamp(rnd(h * GEO.SVH) - 9, 0, GEO.SVH - 18))
                         swatch.BackgroundColor3 = color
@@ -2321,6 +2356,9 @@ function Reborn:CreateWindow(config)
                         end
                         tab._setActive(true)
                         page.Visible = true
+                        killTween(page, "Position")
+                        page.Position = UDim2.new(0, 8, 0, 0)
+                        tween(page, 0.16, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Quint)
                         content.CanvasPosition = Vector2.new(0, 0)
                 end)
                 tab._setActive = setActive
