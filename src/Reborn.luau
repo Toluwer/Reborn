@@ -4,7 +4,7 @@ local TextService = game:GetService("TextService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.8.0",
+        Version = "0.7.3",
         NotificationsEnabled = true,
         _windows = {},
 }
