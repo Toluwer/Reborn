@@ -4,7 +4,7 @@ local TextService = game:GetService("TextService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.7.4",
+        Version = "0.7.5",
         NotificationsEnabled = true,
         _windows = {},
 }
@@ -109,6 +109,32 @@ local function stroke(inst, color, transparency, thickness)
                 ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
                 Parent = inst,
         })
+end
+
+local function feather(inst, r, color, rings, pl, pt, pr, pb)
+        pl, pt, pr, pb = pl or 0, pt or 0, pr or 0, pb or 0
+        local outer
+        if (rings or 2) > 1 then
+                outer = New("Frame", {
+                        Position = UDim2.new(0, -2 - pl, 0, -2 - pt),
+                        Size = UDim2.new(1, 4 + pl + pr, 1, 4 + pt + pb),
+                        BackgroundColor3 = color,
+                        BackgroundTransparency = 0.85,
+                        BorderSizePixel = 0,
+                        Parent = inst,
+                })
+                corner(outer, r + 2)
+        end
+        local inner = New("Frame", {
+                Position = UDim2.new(0, -1 - pl, 0, -1 - pt),
+                Size = UDim2.new(1, 2 + pl + pr, 1, 2 + pt + pb),
+                BackgroundColor3 = color,
+                BackgroundTransparency = 0.6,
+                BorderSizePixel = 0,
+                Parent = inst,
+        })
+        corner(inner, r + 1)
+        return inner, outer
 end
 
 local function padding(inst, t, r, b, l)
@@ -650,10 +676,10 @@ function Reborn:CreateWindow(config)
                 Size = UDim2.new(0, W, 0, H),
                 BackgroundColor3 = theme.LineStrong,
                 BorderSizePixel = 0,
-                ClipsDescendants = true,
                 Parent = gui,
         })
         corner(windowFrame, GEO.WindowRadius)
+        feather(windowFrame, GEO.WindowRadius, theme.LineStrong)
         local windowFace = New("Frame", {
                 Position = UDim2.new(0, 1, 0, 1),
                 Size = UDim2.new(1, -2, 1, -2),
@@ -760,9 +786,21 @@ function Reborn:CreateWindow(config)
                 return b, ic
         end
 
-        local searchBox = New("TextBox", {
+        local searchWrap = New("Frame", {
                 Position = UDim2.new(0, 0, 0, 7),
                 Size = UDim2.new(0, 0, 0, GEO.SearchH),
+                BackgroundColor3 = theme.LineStrong,
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0,
+                Parent = cluster,
+        })
+        corner(searchWrap, 6)
+        local seh, seh2 = feather(searchWrap, 6, theme.LineStrong)
+        seh.BackgroundTransparency = 1
+        seh2.BackgroundTransparency = 1
+        local searchBox = New("TextBox", {
+                Position = UDim2.new(0, 1, 0, 1),
+                Size = UDim2.new(1, -2, 1, -2),
                 BackgroundColor3 = theme.Overlay,
                 BackgroundTransparency = 1,
                 Text = "",
@@ -775,10 +813,9 @@ function Reborn:CreateWindow(config)
                 ClearTextOnFocus = false,
                 BorderSizePixel = 0,
                 ClipsDescendants = true,
-                Parent = cluster,
+                Parent = searchWrap,
         })
-        corner(searchBox, 6)
-        local searchStroke = stroke(searchBox, theme.LineStrong, 1)
+        corner(searchBox, 5)
         padding(searchBox, 0, 9, 0, 9)
 
         local searchBtn = New("TextButton", {
@@ -861,6 +898,7 @@ function Reborn:CreateWindow(config)
                 Parent = gui,
         })
         corner(launcher, GEO.Launcher / 2)
+        feather(launcher, GEO.Launcher / 2, theme.LineStrong)
         local launcherFace = New("Frame", {
                 Position = UDim2.new(0, 1, 0, 1),
                 Size = UDim2.new(1, -2, 1, -2),
@@ -1028,9 +1066,11 @@ function Reborn:CreateWindow(config)
         end
 
         local function openSearch()
-                tween(searchBox, 0.18, { Size = UDim2.new(0, GEO.SearchW, 0, GEO.SearchH) })
+                tween(searchWrap, 0.18, { Size = UDim2.new(0, GEO.SearchW, 0, GEO.SearchH) })
+                tween(searchWrap, 0.15, { BackgroundTransparency = 0 })
                 tween(searchBox, 0.15, { BackgroundTransparency = 0 })
-                tween(searchStroke, 0.15, { Transparency = 0 })
+                tween(seh, 0.15, { BackgroundTransparency = 0.6 })
+                tween(seh2, 0.15, { BackgroundTransparency = 0.85 })
                 searchBox:CaptureFocus()
         end
 
@@ -1038,13 +1078,15 @@ function Reborn:CreateWindow(config)
                 searchBox.Text = ""
                 applyFilter("")
                 searchBox:ReleaseFocus()
-                tween(searchBox, 0.18, { Size = UDim2.new(0, 0, 0, GEO.SearchH) })
+                tween(searchWrap, 0.18, { Size = UDim2.new(0, 0, 0, GEO.SearchH) })
+                tween(searchWrap, 0.15, { BackgroundTransparency = 1 })
                 tween(searchBox, 0.15, { BackgroundTransparency = 1 })
-                tween(searchStroke, 0.15, { Transparency = 1 })
+                tween(seh, 0.15, { BackgroundTransparency = 1 })
+                tween(seh2, 0.15, { BackgroundTransparency = 1 })
         end
 
         searchBtn.Activated:Connect(function()
-                if searchBox.Size.X.Offset > 0 then
+                if searchWrap.Size.X.Offset > 0 then
                         closeSearch()
                 else
                         openSearch()
@@ -1060,23 +1102,34 @@ function Reborn:CreateWindow(config)
         local function makeRow(section, h)
                 local row = New("Frame", {
                         Size = UDim2.new(1, 0, 0, h),
-                        BackgroundColor3 = theme.RowHover,
-                        BackgroundTransparency = 1,
+                        BackgroundColor3 = theme.Line,
                         BorderSizePixel = 0,
                         ZIndex = 1,
                         Parent = section.Rows,
                 })
                 corner(row, 8)
-                local s = stroke(row, theme.Line)
+                local rh, rh2 = feather(row, 8, theme.Line)
+                local face = New("Frame", {
+                        Position = UDim2.new(0, 1, 0, 1),
+                        Size = UDim2.new(1, -2, 1, -2),
+                        BackgroundColor3 = theme.Surface,
+                        BorderSizePixel = 0,
+                        Parent = row,
+                })
+                corner(face, 7)
                 row.MouseEnter:Connect(function()
-                        tween(row, 0.12, { BackgroundTransparency = 0 })
-                        tween(s, 0.12, { Color = theme.LineStrong })
+                        tween(face, 0.12, { BackgroundColor3 = theme.RowHover })
+                        tween(row, 0.12, { BackgroundColor3 = theme.LineStrong })
+                        tween(rh, 0.12, { BackgroundColor3 = theme.LineStrong })
+                        tween(rh2, 0.12, { BackgroundColor3 = theme.LineStrong })
                 end)
                 row.MouseLeave:Connect(function()
-                        tween(row, 0.12, { BackgroundTransparency = 1 })
-                        tween(s, 0.12, { Color = theme.Line })
+                        tween(face, 0.12, { BackgroundColor3 = theme.Surface })
+                        tween(row, 0.12, { BackgroundColor3 = theme.Line })
+                        tween(rh, 0.12, { BackgroundColor3 = theme.Line })
+                        tween(rh2, 0.12, { BackgroundColor3 = theme.Line })
                 end)
-                return row, s
+                return row, face
         end
 
         local function rowLabel(row, text, clear)
@@ -1186,7 +1239,7 @@ function Reborn:CreateWindow(config)
                 if confirmActive then return end
                 setMinimized(false)
                 closeAllPops()
-                if searchBox.Size.X.Offset > 0 then closeSearch() end
+                if searchWrap.Size.X.Offset > 0 then closeSearch() end
                 if not scrim then
                         scrim = New("Frame", {
                                 Size = UDim2.new(1, 0, 1, 0),
@@ -1208,6 +1261,7 @@ function Reborn:CreateWindow(config)
                                 Parent = windowFace,
                         })
                         corner(card, 8)
+                        feather(card, 8, theme.LineStrong)
                         local cardFace = New("Frame", {
                                 Position = UDim2.new(0, 1, 0, 1),
                                 Size = UDim2.new(1, -2, 1, -2),
@@ -1240,24 +1294,41 @@ function Reborn:CreateWindow(config)
                                 Text = "Are you sure you want to close the UI? Reborn will be completely unloaded.",
                                 Parent = cardFace,
                         })
-                        local cancelB = New("TextButton", {
+                        local cancelWrap = New("Frame", {
                                 Position = UDim2.new(0, 24, 0, 100),
                                 Size = UDim2.new(0.5, -29, 0, 36),
-                                BackgroundTransparency = 1,
+                                BackgroundColor3 = theme.Line,
+                                BorderSizePixel = 0,
+                                Parent = cardFace,
+                        })
+                        corner(cancelWrap, 6)
+                        local cbh, cbh2 = feather(cancelWrap, 6, theme.Line)
+                        local cancelB = New("TextButton", {
+                                Position = UDim2.new(0, 1, 0, 1),
+                                Size = UDim2.new(1, -2, 1, -2),
                                 BackgroundColor3 = theme.RowHover,
+                                BackgroundTransparency = 1,
                                 Text = "Cancel",
                                 Font = F.Semibold,
                                 TextSize = 13,
                                 TextColor3 = theme.TextMuted,
                                 AutoButtonColor = false,
                                 BorderSizePixel = 0,
-                                Parent = cardFace,
+                                Parent = cancelWrap,
                         })
-                        corner(cancelB, 6)
-                        local cbs = stroke(cancelB, theme.Line)
-                        local closeB = New("TextButton", {
+                        corner(cancelB, 5)
+                        local closeWrap = New("Frame", {
                                 Position = UDim2.new(0.5, 5, 0, 100),
                                 Size = UDim2.new(0.5, -29, 0, 36),
+                                BackgroundColor3 = theme.Error,
+                                BorderSizePixel = 0,
+                                Parent = cardFace,
+                        })
+                        corner(closeWrap, 6)
+                        feather(closeWrap, 6, theme.Error)
+                        local closeB = New("TextButton", {
+                                Position = UDim2.new(0, 1, 0, 1),
+                                Size = UDim2.new(1, -2, 1, -2),
                                 BackgroundColor3 = theme.Error,
                                 Text = "Close",
                                 Font = F.Semibold,
@@ -1265,24 +1336,30 @@ function Reborn:CreateWindow(config)
                                 TextColor3 = Color3.new(1, 1, 1),
                                 AutoButtonColor = false,
                                 BorderSizePixel = 0,
-                                Parent = cardFace,
+                                Parent = closeWrap,
                         })
-                        corner(closeB, 6)
+                        corner(closeB, 5)
                         cancelB.MouseEnter:Connect(function()
                                 tween(cancelB, 0.12, { BackgroundTransparency = 0 })
                                 tween(cancelB, 0.12, { TextColor3 = theme.Text })
-                                tween(cbs, 0.12, { Color = theme.LineStrong })
+                                tween(cancelWrap, 0.12, { BackgroundColor3 = theme.LineStrong })
+                                tween(cbh, 0.12, { BackgroundColor3 = theme.LineStrong })
+                                tween(cbh2, 0.12, { BackgroundColor3 = theme.LineStrong })
                         end)
                         cancelB.MouseLeave:Connect(function()
                                 tween(cancelB, 0.12, { BackgroundTransparency = 1 })
                                 tween(cancelB, 0.12, { TextColor3 = theme.TextMuted })
-                                tween(cbs, 0.12, { Color = theme.Line })
+                                tween(cancelWrap, 0.12, { BackgroundColor3 = theme.Line })
+                                tween(cbh, 0.12, { BackgroundColor3 = theme.Line })
+                                tween(cbh2, 0.12, { BackgroundColor3 = theme.Line })
                         end)
                         closeB.MouseEnter:Connect(function()
                                 tween(closeB, 0.12, { BackgroundColor3 = Color3.fromRGB(255, 51, 51) })
+                                tween(closeWrap, 0.12, { BackgroundColor3 = Color3.fromRGB(255, 51, 51) })
                         end)
                         closeB.MouseLeave:Connect(function()
                                 tween(closeB, 0.12, { BackgroundColor3 = theme.Error })
+                                tween(closeWrap, 0.12, { BackgroundColor3 = theme.Error })
                         end)
                         cancelB.Activated:Connect(hideConfirm)
                         closeB.Activated:Connect(unloadNow)
@@ -1331,13 +1408,21 @@ function Reborn:CreateWindow(config)
                         AnchorPoint = Vector2.new(1, 0.5),
                         Position = UDim2.new(1, -GEO.RowPad, 0.5, 0),
                         Size = UDim2.new(0, GEO.SwitchW, 0, GEO.SwitchH),
-                        BackgroundColor3 = theme.ToggleOff,
+                        BackgroundColor3 = theme.LineStrong,
                         BorderSizePixel = 0,
                         ZIndex = 5,
                         Parent = row,
                 })
                 corner(track, GEO.SwitchH / 2)
-                local ts = stroke(track, theme.LineStrong)
+                local th, th2 = feather(track, GEO.SwitchH / 2, theme.LineStrong)
+                local trackFace = New("Frame", {
+                        Position = UDim2.new(0, 1, 0, 1),
+                        Size = UDim2.new(1, -2, 1, -2),
+                        BackgroundColor3 = theme.ToggleOff,
+                        BorderSizePixel = 0,
+                        Parent = track,
+                })
+                corner(trackFace, GEO.SwitchH / 2 - 1)
                 local knob = New("Frame", {
                         Position = UDim2.new(0, 3, 0, 3),
                         Size = UDim2.new(0, GEO.Knob, 0, GEO.Knob),
@@ -1347,20 +1432,27 @@ function Reborn:CreateWindow(config)
                         Parent = track,
                 })
                 corner(knob, GEO.Knob / 2)
+                feather(knob, GEO.Knob / 2, theme.Handle, 1)
 
                 local value = cfg.Value and true or false
                 local tog = { Value = value }
 
                 local function render(fire, instant)
                         local nx = value and (GEO.SwitchW - GEO.Knob - 3) or 3
+                        local c = value and theme.Accent or theme.ToggleOff
+                        local b = value and theme.Accent or theme.LineStrong
                         if instant then
                                 knob.Position = UDim2.new(0, nx, 0, 3)
-                                track.BackgroundColor3 = value and theme.Accent or theme.ToggleOff
-                                ts.Color = value and theme.Accent or theme.LineStrong
+                                trackFace.BackgroundColor3 = c
+                                track.BackgroundColor3 = b
+                                th.BackgroundColor3 = b
+                                th2.BackgroundColor3 = b
                         else
                                 tween(knob, 0.16, { Position = UDim2.new(0, nx, 0, 3) })
-                                tween(track, 0.16, { BackgroundColor3 = value and theme.Accent or theme.ToggleOff })
-                                tween(ts, 0.16, { Color = value and theme.Accent or theme.LineStrong })
+                                tween(trackFace, 0.16, { BackgroundColor3 = c })
+                                tween(track, 0.16, { BackgroundColor3 = b })
+                                tween(th, 0.16, { BackgroundColor3 = b })
+                                tween(th2, 0.16, { BackgroundColor3 = b })
                         end
                         tog.Value = value
                         if fire and cfg.Callback then cfg.Callback(value) end
@@ -1382,10 +1474,10 @@ function Reborn:CreateWindow(config)
         local function addSlider(section, cfg)
                 cfg = cfg or {}
                 local row = makeRow(section, GEO.SliderH)
-                padding(row, 10, GEO.RowPad, 10, GEO.RowPad)
 
                 local top = New("Frame", {
-                        Size = UDim2.new(1, 0, 0, 16),
+                        Position = UDim2.new(0, GEO.RowPad, 0, 10),
+                        Size = UDim2.new(1, -GEO.RowPad * 2, 0, 16),
                         BackgroundTransparency = 1,
                         Parent = row,
                 })
@@ -1415,8 +1507,8 @@ function Reborn:CreateWindow(config)
                 })
 
                 local track = New("TextButton", {
-                        Position = UDim2.new(0, 0, 0, 24),
-                        Size = UDim2.new(1, 0, 0, GEO.SliderTrackH),
+                        Position = UDim2.new(0, GEO.RowPad, 0, 34),
+                        Size = UDim2.new(1, -GEO.RowPad * 2, 0, GEO.SliderTrackH),
                         BackgroundTransparency = 1,
                         Text = "",
                         AutoButtonColor = false,
@@ -1447,6 +1539,7 @@ function Reborn:CreateWindow(config)
                         Parent = track,
                 })
                 corner(handle, GEO.HandleD / 2)
+                feather(handle, GEO.HandleD / 2, theme.Handle, 1)
 
                 local min = cfg.Min or 0
                 local max = cfg.Max or 100
@@ -1548,6 +1641,7 @@ function Reborn:CreateWindow(config)
                         Parent = row,
                 })
                 corner(pop, 8)
+                feather(pop, 8, theme.LineStrong)
                 local popFace = New("Frame", {
                         Position = UDim2.new(0, 1, 0, 1),
                         Size = UDim2.new(1, -2, 1, -2),
@@ -1714,7 +1808,7 @@ function Reborn:CreateWindow(config)
                         AnchorPoint = Vector2.new(1, 0.5),
                         Position = UDim2.new(1, -GEO.RowPad, 0.5, 0),
                         Size = UDim2.new(0, GEO.ChipMinW, 0, GEO.ChipH),
-                        BackgroundColor3 = theme.Chip,
+                        BackgroundColor3 = theme.LineStrong,
                         BorderSizePixel = 0,
                         Text = "",
                         AutoButtonColor = false,
@@ -1722,7 +1816,16 @@ function Reborn:CreateWindow(config)
                         Parent = row,
                 })
                 corner(chip, 4)
-                local cs = stroke(chip, theme.LineStrong)
+                local ch, ch2 = feather(chip, 4, theme.LineStrong)
+                local chipFace = New("Frame", {
+                        Position = UDim2.new(0, 1, 0, 1),
+                        Size = UDim2.new(1, -2, 1, -2),
+                        BackgroundColor3 = theme.Chip,
+                        BorderSizePixel = 0,
+                        ZIndex = 1,
+                        Parent = chip,
+                })
+                corner(chipFace, 3)
                 local txt = New("TextLabel", {
                         Size = UDim2.new(1, -16, 1, 0),
                         BackgroundTransparency = 1,
@@ -1761,10 +1864,15 @@ function Reborn:CreateWindow(config)
                                 pulseTween:Cancel()
                                 pulseTween = nil
                         end
-                        killTween(cs, "Color")
+                        killTween(chip, "BackgroundColor3")
+                        killTween(chip, "BackgroundTransparency")
+                        killTween(ch, "BackgroundColor3")
+                        killTween(ch2, "BackgroundColor3")
                         killTween(txt, "TextColor3")
-                        cs.Transparency = 0
-                        cs.Color = theme.LineStrong
+                        chip.BackgroundTransparency = 0
+                        chip.BackgroundColor3 = theme.LineStrong
+                        ch.BackgroundColor3 = theme.LineStrong
+                        ch2.BackgroundColor3 = theme.LineStrong
                         txt.TextColor3 = theme.TextMuted
                         state.listening = nil
                 end
@@ -1789,9 +1897,11 @@ function Reborn:CreateWindow(config)
                         kb._commit = commitBind
                         kb._prev = txt.Text
                         txt.Text = "· · ·"
-                        tween(cs, 0.12, { Color = theme.Accent })
+                        tween(chip, 0.12, { BackgroundColor3 = theme.Accent })
+                        tween(ch, 0.12, { BackgroundColor3 = theme.Accent })
+                        tween(ch2, 0.12, { BackgroundColor3 = theme.Accent })
                         tween(txt, 0.12, { TextColor3 = theme.Accent })
-                        pulseTween = TweenService:Create(cs, TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, -1, true), { Transparency = 0.6 })
+                        pulseTween = TweenService:Create(chip, TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, -1, true), { BackgroundTransparency = 0.6 })
                         pulseTween:Play()
                 end
 
@@ -1852,13 +1962,22 @@ function Reborn:CreateWindow(config)
                         AnchorPoint = Vector2.new(1, 0.5),
                         Position = UDim2.new(1, 0, 0.5, 0),
                         Size = UDim2.new(0, GEO.Swatch, 0, GEO.Swatch),
-                        BackgroundColor3 = theme.Accent,
+                        BackgroundColor3 = theme.LineStrong,
                         BorderSizePixel = 0,
                         ZIndex = 6,
                         Parent = trigger,
                 })
                 corner(swatch, 6)
-                stroke(swatch, theme.LineStrong)
+                feather(swatch, 6, theme.LineStrong)
+                local swatchFace = New("Frame", {
+                        Position = UDim2.new(0, 1, 0, 1),
+                        Size = UDim2.new(1, -2, 1, -2),
+                        BackgroundColor3 = theme.Accent,
+                        BorderSizePixel = 0,
+                        ZIndex = 1,
+                        Parent = swatch,
+                })
+                corner(swatchFace, 5)
 
                 local popH = 22 + GEO.SVH + 10 + GEO.Swatch
                 local pop = New("Frame", {
@@ -1872,6 +1991,7 @@ function Reborn:CreateWindow(config)
                         Parent = row,
                 })
                 corner(pop, 8)
+                feather(pop, 8, theme.LineStrong)
                 local popFace = New("Frame", {
                         Position = UDim2.new(0, 1, 0, 1),
                         Size = UDim2.new(1, -2, 1, -2),
@@ -1918,13 +2038,21 @@ function Reborn:CreateWindow(config)
                 })
                 local dot = New("Frame", {
                         Size = UDim2.new(0, 14, 0, 14),
-                        BackgroundColor3 = Color3.new(1, 1, 1),
+                        BackgroundColor3 = Color3.new(0, 0, 0),
                         BorderSizePixel = 0,
                         ZIndex = 3,
                         Parent = sv,
                 })
                 corner(dot, 7)
-                stroke(dot, Color3.new(0, 0, 0), 0.2, 2)
+                feather(dot, 7, Color3.new(0, 0, 0), 1)
+                local dotFace = New("Frame", {
+                        Position = UDim2.new(0, 1, 0, 1),
+                        Size = UDim2.new(1, -2, 1, -2),
+                        BackgroundColor3 = Color3.new(1, 1, 1),
+                        BorderSizePixel = 0,
+                        Parent = dot,
+                })
+                corner(dotFace, 6)
 
                 local hue = New("Frame", {
                         AnchorPoint = Vector2.new(1, 0),
@@ -1951,23 +2079,39 @@ function Reborn:CreateWindow(config)
                 local hdot = New("Frame", {
                         Position = UDim2.new(0, -2, 0, 0),
                         Size = UDim2.new(0, 18, 0, 18),
-                        BackgroundColor3 = Color3.new(1, 1, 1),
+                        BackgroundColor3 = Color3.new(0, 0, 0),
                         BorderSizePixel = 0,
                         ZIndex = 3,
                         Parent = hue,
                 })
                 corner(hdot, 9)
-                stroke(hdot, Color3.new(0, 0, 0), 0.2, 2)
+                feather(hdot, 9, Color3.new(0, 0, 0), 1)
+                local hdotFace = New("Frame", {
+                        Position = UDim2.new(0, 1, 0, 1),
+                        Size = UDim2.new(1, -2, 1, -2),
+                        BackgroundColor3 = Color3.new(1, 1, 1),
+                        BorderSizePixel = 0,
+                        Parent = hdot,
+                })
+                corner(hdotFace, 8)
 
                 local preview = New("Frame", {
                         Position = UDim2.new(0, 0, 0, GEO.SVH + 10),
                         Size = UDim2.new(0, GEO.Swatch, 0, GEO.Swatch),
-                        BackgroundColor3 = theme.Accent,
+                        BackgroundColor3 = theme.LineStrong,
                         BorderSizePixel = 0,
                         Parent = popFace,
                 })
                 corner(preview, 6)
-                stroke(preview, theme.LineStrong)
+                feather(preview, 6, theme.LineStrong)
+                local previewFace = New("Frame", {
+                        Position = UDim2.new(0, 1, 0, 1),
+                        Size = UDim2.new(1, -2, 1, -2),
+                        BackgroundColor3 = theme.Accent,
+                        BorderSizePixel = 0,
+                        Parent = preview,
+                })
+                corner(previewFace, 5)
                 New("TextLabel", {
                         Position = UDim2.new(0, GEO.Swatch + 10, 0, GEO.SVH + 10),
                         Size = UDim2.new(0, 0, 0, GEO.Swatch),
@@ -2013,8 +2157,8 @@ function Reborn:CreateWindow(config)
                         local svw = GEO.PopW - 22 - GEO.HueW - 10
                         dot.Position = UDim2.new(0, clamp(rnd(s * svw) - 7, 0, svw - 14), 0, clamp(rnd((1 - v) * GEO.SVH) - 7, 0, GEO.SVH - 14))
                         hdot.Position = UDim2.new(0, -2, 0, clamp(rnd(h * GEO.SVH) - 9, 0, GEO.SVH - 18))
-                        swatch.BackgroundColor3 = color
-                        preview.BackgroundColor3 = color
+                        swatchFace.BackgroundColor3 = color
+                        previewFace.BackgroundColor3 = color
                         hexLbl.Text = hex
                         hexVal.Text = hex
                         cp.Hex = hex
@@ -2096,10 +2240,20 @@ function Reborn:CreateWindow(config)
                 local row = makeRow(section, GEO.RowH)
                 rowLabel(row, cfg.Text, 202)
 
-                local box = New("TextBox", {
+                local field = New("Frame", {
                         AnchorPoint = Vector2.new(1, 0.5),
                         Position = UDim2.new(1, -GEO.RowPad, 0.5, 0),
                         Size = UDim2.new(0, GEO.FieldW, 0, GEO.FieldH),
+                        BackgroundColor3 = theme.LineStrong,
+                        BorderSizePixel = 0,
+                        ZIndex = 5,
+                        Parent = row,
+                })
+                corner(field, 6)
+                local fh, fh2 = feather(field, 6, theme.LineStrong)
+                local box = New("TextBox", {
+                        Position = UDim2.new(0, 1, 0, 1),
+                        Size = UDim2.new(1, -2, 1, -2),
                         BackgroundColor3 = theme.Overlay,
                         BorderSizePixel = 0,
                         Text = tostring(cfg.Value or ""),
@@ -2111,18 +2265,21 @@ function Reborn:CreateWindow(config)
                         TextXAlignment = Enum.TextXAlignment.Left,
                         ClearTextOnFocus = false,
                         ClipsDescendants = true,
-                        ZIndex = 5,
-                        Parent = row,
+                        ZIndex = 2,
+                        Parent = field,
                 })
-                corner(box, 6)
-                local bs = stroke(box, theme.LineStrong)
+                corner(box, 5)
                 padding(box, 0, 10, 0, 10)
 
                 box.Focused:Connect(function()
-                        tween(bs, 0.12, { Color = theme.Accent })
+                        tween(field, 0.12, { BackgroundColor3 = theme.Accent })
+                        tween(fh, 0.12, { BackgroundColor3 = theme.Accent })
+                        tween(fh2, 0.12, { BackgroundColor3 = theme.Accent })
                 end)
                 box.FocusLost:Connect(function(enter)
-                        tween(bs, 0.12, { Color = theme.LineStrong })
+                        tween(field, 0.12, { BackgroundColor3 = theme.LineStrong })
+                        tween(fh, 0.12, { BackgroundColor3 = theme.LineStrong })
+                        tween(fh2, 0.12, { BackgroundColor3 = theme.LineStrong })
                         if cfg.Callback then cfg.Callback(box.Text, enter and true or false) end
                 end)
                 registerSearch(row, cfg.Text, section)
@@ -2141,47 +2298,64 @@ function Reborn:CreateWindow(config)
 
         local function addButton(section, cfg)
                 cfg = cfg or {}
-                local btn = New("TextButton", {
+                local primary = cfg.Primary and true or false
+                local shell = New("Frame", {
                         Size = UDim2.new(1, 0, 0, GEO.RowH),
-                        Text = tostring(cfg.Text or "Button"),
-                        Font = F.Semibold,
-                        TextSize = 13,
-                        AutoButtonColor = false,
+                        BackgroundColor3 = primary and theme.Accent or theme.Line,
                         BorderSizePixel = 0,
                         ZIndex = 1,
                         Parent = section.Rows,
                 })
-                corner(btn, 8)
-                local s
-                if cfg.Primary then
-                        btn.BackgroundColor3 = theme.Accent
-                        btn.TextColor3 = Color3.new(1, 1, 1)
+                corner(shell, 8)
+                local bh, bh2 = feather(shell, 8, primary and theme.Accent or theme.Line)
+                local btn = New("TextButton", {
+                        Position = UDim2.new(0, 1, 0, 1),
+                        Size = UDim2.new(1, -2, 1, -2),
+                        BackgroundColor3 = primary and theme.Accent or theme.RowHover,
+                        BackgroundTransparency = primary and 0 or 1,
+                        Text = tostring(cfg.Text or "Button"),
+                        Font = F.Semibold,
+                        TextSize = 13,
+                        TextColor3 = primary and Color3.new(1, 1, 1) or theme.TextMuted,
+                        AutoButtonColor = false,
+                        BorderSizePixel = 0,
+                        ZIndex = 2,
+                        Parent = shell,
+                })
+                corner(btn, 7)
+                if primary then
                         btn.MouseEnter:Connect(function()
                                 tween(btn, 0.13, { BackgroundColor3 = theme.AccentHover })
+                                tween(shell, 0.13, { BackgroundColor3 = theme.AccentHover })
+                                tween(bh, 0.13, { BackgroundColor3 = theme.AccentHover })
+                                tween(bh2, 0.13, { BackgroundColor3 = theme.AccentHover })
                         end)
                         btn.MouseLeave:Connect(function()
                                 tween(btn, 0.13, { BackgroundColor3 = theme.Accent })
+                                tween(shell, 0.13, { BackgroundColor3 = theme.Accent })
+                                tween(bh, 0.13, { BackgroundColor3 = theme.Accent })
+                                tween(bh2, 0.13, { BackgroundColor3 = theme.Accent })
                         end)
                 else
-                        btn.BackgroundColor3 = theme.RowHover
-                        btn.BackgroundTransparency = 1
-                        btn.TextColor3 = theme.TextMuted
-                        s = stroke(btn, theme.Line)
                         btn.MouseEnter:Connect(function()
                                 tween(btn, 0.13, { BackgroundTransparency = 0 })
                                 tween(btn, 0.13, { TextColor3 = theme.Text })
-                                tween(s, 0.13, { Color = theme.LineStrong })
+                                tween(shell, 0.13, { BackgroundColor3 = theme.LineStrong })
+                                tween(bh, 0.13, { BackgroundColor3 = theme.LineStrong })
+                                tween(bh2, 0.13, { BackgroundColor3 = theme.LineStrong })
                         end)
                         btn.MouseLeave:Connect(function()
                                 tween(btn, 0.13, { BackgroundTransparency = 1 })
                                 tween(btn, 0.13, { TextColor3 = theme.TextMuted })
-                                tween(s, 0.13, { Color = theme.Line })
+                                tween(shell, 0.13, { BackgroundColor3 = theme.Line })
+                                tween(bh, 0.13, { BackgroundColor3 = theme.Line })
+                                tween(bh2, 0.13, { BackgroundColor3 = theme.Line })
                         end)
                 end
                 btn.Activated:Connect(function()
                         if cfg.Callback then cfg.Callback() end
                 end)
-                registerSearch(btn, cfg.Text, section)
+                registerSearch(shell, cfg.Text, section)
                 local b = { Button = btn }
                 function b:Set(text)
                         btn.Text = tostring(text)
@@ -2253,11 +2427,21 @@ function Reborn:CreateWindow(config)
                         local bd = New("Frame", {
                                 Position = UDim2.new(0, titleW + 10, 0, -1),
                                 Size = UDim2.new(0, badgeW, 0, 16),
-                                BackgroundTransparency = 1,
+                                BackgroundColor3 = theme.Accent,
+                                BackgroundTransparency = 0.6,
+                                BorderSizePixel = 0,
                                 Parent = head,
                         })
                         corner(bd, 4)
-                        stroke(bd, theme.Accent, 0.6)
+                        feather(bd, 4, theme.Accent, 1, 5, 2, 5, 2)
+                        local bdFace = New("Frame", {
+                                Position = UDim2.new(0, 1, 0, 1),
+                                Size = UDim2.new(1, -2, 1, -2),
+                                BackgroundColor3 = theme.Surface,
+                                BorderSizePixel = 0,
+                                Parent = bd,
+                        })
+                        corner(bdFace, 3)
                         padding(bd, 2, 5, 2, 5)
                         New("TextLabel", {
                                 Size = UDim2.new(1, 0, 1, 0),
@@ -2315,16 +2499,20 @@ function Reborn:CreateWindow(config)
                         Parent = tabsHolder,
                 })
                 corner(btn, 8)
-                local ic
+                local padL = 12
                 if iconName and ICONS[iconName] then
                         ic = icon(btn, iconName, 16, theme.TextMuted)
                         ic.AnchorPoint = Vector2.new(0, 0.5)
                         ic.Position = UDim2.new(0, -26, 0.5, 0)
                         ic.ZIndex = 2
                         padding(btn, 0, 12, 0, 38)
+                        padL = 38
                 else
                         padding(btn, 0, 12, 0, 12)
                 end
+                local tbh, tbh2 = feather(btn, 8, theme.RowHover, 2, padL, 0, 12, 0)
+                tbh.BackgroundTransparency = 1
+                tbh2.BackgroundTransparency = 1
 
                 local page = New("Frame", {
                         Size = UDim2.new(1, 0, 0, 0),
@@ -2349,12 +2537,16 @@ function Reborn:CreateWindow(config)
                         if ic then tween(ic, 0.12, { ImageColor3 = active and theme.Text or theme.TextMuted }) end
                         tween(btn, 0.12, { BackgroundTransparency = active and 0 or 1 })
                         tween(btn, 0.12, { TextColor3 = active and theme.Text or theme.TextMuted })
+                        tween(tbh, 0.12, { BackgroundTransparency = active and 0.6 or 1 })
+                        tween(tbh2, 0.12, { BackgroundTransparency = active and 0.85 or 1 })
                         btn.Font = active and F.Semibold or F.Medium
                 end
                 btn.MouseEnter:Connect(function()
                         if not page.Visible then
                                 tween(btn, 0.12, { BackgroundTransparency = 0 })
                                 tween(btn, 0.12, { TextColor3 = theme.Text })
+                                tween(tbh, 0.12, { BackgroundTransparency = 0.6 })
+                                tween(tbh2, 0.12, { BackgroundTransparency = 0.85 })
                                 if ic then tween(ic, 0.12, { ImageColor3 = theme.Text }) end
                         end
                 end)
@@ -2362,6 +2554,8 @@ function Reborn:CreateWindow(config)
                         if not page.Visible then
                                 tween(btn, 0.12, { BackgroundTransparency = 1 })
                                 tween(btn, 0.12, { TextColor3 = theme.TextMuted })
+                                tween(tbh, 0.12, { BackgroundTransparency = 1 })
+                                tween(tbh2, 0.12, { BackgroundTransparency = 1 })
                                 if ic then tween(ic, 0.12, { ImageColor3 = theme.TextMuted }) end
                         end
                 end)
