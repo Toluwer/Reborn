@@ -4,7 +4,7 @@ local TextService = game:GetService("TextService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.7.3",
+        Version = "0.7.4",
         NotificationsEnabled = true,
         _windows = {},
 }
@@ -186,6 +186,16 @@ end
 
 local function keyDisplayName(name)
         return (name:gsub("(%l)(%u)", "%1 %2"))
+end
+
+local function fmtNum(n)
+        if math.abs(n - math.floor(n + 0.5)) < 1e-6 then
+                return string.format("%d", math.floor(n + 0.5))
+        end
+        local s = string.format("%.2f", n)
+        s = s:gsub("0+$", "")
+        s = s:gsub("%.$", "")
+        return s
 end
 
 local MOUSE_NAMES = {
@@ -419,11 +429,10 @@ local function buildToastLayer(gui, theme)
 
         local function toastHeight(cfg)
                 local desc = tostring(cfg.Description or "")
+                if desc == "" then return 38 end
                 local lines = 1
-                if desc ~= "" then
-                        local w = measureText(desc, 12)
-                        lines = math.max(1, math.ceil(w / math.max(GEO.ToastW - 39, 40)))
-                end
+                local w = measureText(desc, 12)
+                lines = math.max(1, math.ceil(w / math.max(GEO.ToastW - 39, 40)))
                 return 22 + math.max(16, 18 + (lines * 15 + 4))
         end
 
@@ -499,9 +508,11 @@ local function buildToastLayer(gui, theme)
                         Text = tostring(cfg.Description or ""),
                         Parent = toast,
                 })
+                desc.Visible = desc.Text ~= ""
 
                 local hit = New("TextButton", {
-                        Size = UDim2.new(1, 0, 1, 0),
+                        Position = UDim2.new(0, -12, 0, -11),
+                        Size = UDim2.new(1, 24, 1, 22),
                         BackgroundTransparency = 1,
                         Text = "",
                         AutoButtonColor = false,
@@ -771,7 +782,7 @@ function Reborn:CreateWindow(config)
         padding(searchBox, 0, 9, 0, 9)
 
         local searchBtn = New("TextButton", {
-                Position = UDim2.new(0, GEO.SearchW + 9, 0, 10),
+                Position = UDim2.new(0, GEO.SearchW + 9, 0, 9),
                 Size = UDim2.new(0, 28, 0, 28),
                 BackgroundTransparency = 1,
                 BackgroundColor3 = theme.RowHover,
@@ -823,7 +834,7 @@ function Reborn:CreateWindow(config)
                 ClipsDescendants = true,
                 Parent = sidebar,
         })
-        padding(tabsHolder, 10, 10, 8, 10)
+        padding(tabsHolder, 10, 10, 10, 10)
         list(tabsHolder, 3)
 
         local content = New("ScrollingFrame", {
@@ -843,29 +854,34 @@ function Reborn:CreateWindow(config)
                 AnchorPoint = Vector2.new(1, 1),
                 Position = UDim2.new(1, -22, 1, -22),
                 Size = UDim2.new(0, GEO.Launcher, 0, GEO.Launcher),
-                BackgroundColor3 = theme.Overlay,
+                BackgroundColor3 = theme.LineStrong,
                 BorderSizePixel = 0,
                 Visible = false,
                 ZIndex = 40,
                 Parent = gui,
         })
-        corner(launcher, 23)
-        stroke(launcher, theme.LineStrong)
-        do
-                local d = New("Frame", {
-                        Position = UDim2.new(0, 16, 0, 16),
-                        Size = UDim2.new(0, 14, 0, 14),
-                        Rotation = 45,
-                        BackgroundColor3 = theme.Accent,
-                        BorderSizePixel = 0,
-                        Parent = launcher,
-                })
-        end
+        corner(launcher, GEO.Launcher / 2)
+        local launcherFace = New("Frame", {
+                Position = UDim2.new(0, 1, 0, 1),
+                Size = UDim2.new(1, -2, 1, -2),
+                BackgroundColor3 = theme.Overlay,
+                BorderSizePixel = 0,
+                Parent = launcher,
+        })
+        corner(launcherFace, GEO.Launcher / 2 - 1)
+        New("Frame", {
+                Position = UDim2.new(0, 15, 0, 15),
+                Size = UDim2.new(0, 14, 0, 14),
+                Rotation = 45,
+                BackgroundColor3 = theme.Accent,
+                BorderSizePixel = 0,
+                Parent = launcherFace,
+        })
         launcher.MouseEnter:Connect(function()
-                tween(launcher, 0.12, { BackgroundColor3 = theme.Chip })
+                tween(launcherFace, 0.12, { BackgroundColor3 = theme.Chip })
         end)
         launcher.MouseLeave:Connect(function()
-                tween(launcher, 0.12, { BackgroundColor3 = theme.Overlay })
+                tween(launcherFace, 0.12, { BackgroundColor3 = theme.Overlay })
         end)
 
         local toastLayer = buildToastLayer(gui, theme)
@@ -1253,20 +1269,20 @@ function Reborn:CreateWindow(config)
                         })
                         corner(closeB, 6)
                         cancelB.MouseEnter:Connect(function()
-                                cancelB.BackgroundTransparency = 0
-                                cancelB.TextColor3 = theme.Text
-                                cbs.Color = theme.LineStrong
+                                tween(cancelB, 0.12, { BackgroundTransparency = 0 })
+                                tween(cancelB, 0.12, { TextColor3 = theme.Text })
+                                tween(cbs, 0.12, { Color = theme.LineStrong })
                         end)
                         cancelB.MouseLeave:Connect(function()
-                                cancelB.BackgroundTransparency = 1
-                                cancelB.TextColor3 = theme.TextMuted
-                                cbs.Color = theme.Line
+                                tween(cancelB, 0.12, { BackgroundTransparency = 1 })
+                                tween(cancelB, 0.12, { TextColor3 = theme.TextMuted })
+                                tween(cbs, 0.12, { Color = theme.Line })
                         end)
                         closeB.MouseEnter:Connect(function()
-                                closeB.BackgroundColor3 = Color3.fromRGB(255, 51, 51)
+                                tween(closeB, 0.12, { BackgroundColor3 = Color3.fromRGB(255, 51, 51) })
                         end)
                         closeB.MouseLeave:Connect(function()
-                                closeB.BackgroundColor3 = theme.Error
+                                tween(closeB, 0.12, { BackgroundColor3 = theme.Error })
                         end)
                         cancelB.Activated:Connect(hideConfirm)
                         closeB.Activated:Connect(unloadNow)
@@ -1302,7 +1318,7 @@ function Reborn:CreateWindow(config)
                 pop.ZIndex = 45
                 pop.AnchorPoint = Vector2.new(0, 0)
                 pop.Size = UDim2.new(0, popW, 0, popH)
-                return x, y
+                return x, y, popH
         end
 
         local function addToggle(section, cfg)
@@ -1454,7 +1470,7 @@ function Reborn:CreateWindow(config)
                         local px = rnd(p * tw)
                         fill.Size = UDim2.new(0, px, 0, GEO.RailH)
                         handle.Position = UDim2.new(0, clamp(px - GEO.HandleD / 2, 0, tw - GEO.HandleD), 0, (GEO.SliderTrackH - GEO.HandleD) / 2)
-                        val.Text = tostring(value) .. suffix
+                        val.Text = fmtNum(value) .. suffix
                         sld.Value = value
                 end
                 track:GetPropertyChangedSignal("AbsoluteSize"):Connect(render)
@@ -1555,7 +1571,8 @@ function Reborn:CreateWindow(config)
                 list(listScroll, 0)
                 if #options == 0 then
                         New("TextLabel", {
-                                Size = UDim2.new(1, -6, 0, GEO.OptH),
+                                Position = UDim2.new(0, 10, 0, 0),
+                                Size = UDim2.new(1, -16, 0, GEO.OptH),
                                 BackgroundTransparency = 1,
                                 Font = F.Medium,
                                 TextSize = 13,
@@ -1578,13 +1595,13 @@ function Reborn:CreateWindow(config)
                         dd._open = o
                         if o then
                                 closeAllPops(pop)
-                                local x, y = mountPop(row, pop, popH, row.AbsoluteSize.X)
+                                local x, y, cappedH = mountPop(row, pop, popH, row.AbsoluteSize.X)
                                 listScroll.CanvasPosition = Vector2.new(0, 0)
                                 pop.Visible = true
                                 pop.Position = UDim2.new(0, x, 0, y + 6)
                                 tween(pop, 0.15, { Position = UDim2.new(0, x, 0, y) }, Enum.EasingStyle.Quint)
                                 tween(chev, 0.18, { Rotation = 180 })
-                                registerPop(row, pop, setOpen, popH)
+                                registerPop(row, pop, setOpen, cappedH)
                         else
                                 tween(pop, 0.12, { Position = UDim2.new(0, pop.Position.X.Offset, 0, pop.Position.Y.Offset + 4) })
                                 task.delay(0.14, function()
@@ -1843,7 +1860,7 @@ function Reborn:CreateWindow(config)
                 corner(swatch, 6)
                 stroke(swatch, theme.LineStrong)
 
-                local popH = 10 + GEO.SVH + 10 + GEO.Swatch + 10
+                local popH = 22 + GEO.SVH + 10 + GEO.Swatch
                 local pop = New("Frame", {
                         AnchorPoint = Vector2.new(1, 0),
                         Position = UDim2.new(1, -GEO.RowPad, 0, GEO.RowH + 6),
@@ -2046,11 +2063,11 @@ function Reborn:CreateWindow(config)
                         open = o
                         if o then
                                 closeAllPops(pop)
-                                local x, y = mountPop(row, pop, popH, GEO.PopW, true)
+                                local x, y, cappedH = mountPop(row, pop, popH, GEO.PopW, true)
                                 pop.Visible = true
                                 pop.Position = UDim2.new(0, x, 0, y + 6)
                                 tween(pop, 0.15, { Position = UDim2.new(0, x, 0, y) }, Enum.EasingStyle.Quint)
-                                registerPop(row, pop, setOpen, popH, GEO.PopW, true)
+                                registerPop(row, pop, setOpen, cappedH, GEO.PopW, true)
                         else
                                 active = nil
                                 tween(pop, 0.12, { Position = UDim2.new(0, pop.Position.X.Offset, 0, pop.Position.Y.Offset + 4) })
