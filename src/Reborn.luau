@@ -4,7 +4,7 @@ local TextService = game:GetService("TextService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.7.7",
+        Version = "0.7.8",
         NotificationsEnabled = true,
         _windows = {},
 }
@@ -1806,6 +1806,7 @@ function Reborn:CreateWindow(config)
                 })
                 corner(chipFace, 3)
                 local txt = New("TextLabel", {
+                        Position = UDim2.new(0, 8, 0, 0),
                         Size = UDim2.new(1, -16, 1, 0),
                         BackgroundTransparency = 1,
                         Font = F.Mono,
@@ -1818,11 +1819,11 @@ function Reborn:CreateWindow(config)
                         Parent = chip,
                 })
                 local function fitChip()
-                        local w = math.max(GEO.ChipMinW, txt.TextBounds.X + 18)
+                        local w = math.max(GEO.ChipMinW, measureText(txt.Text, 11, F.Mono) + 18)
                         chip.Size = UDim2.new(0, rnd(w), 0, GEO.ChipH)
                         lbl.Size = UDim2.new(1, -(GEO.RowPad + 22 + w), 0, 16)
                 end
-                txt:GetPropertyChangedSignal("TextBounds"):Connect(fitChip)
+                txt:GetPropertyChangedSignal("Text"):Connect(fitChip)
                 task.defer(fitChip)
 
                 local kb = {
