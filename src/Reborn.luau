@@ -4,7 +4,7 @@ local TextService = game:GetService("TextService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.7.5",
+        Version = "0.7.6",
         NotificationsEnabled = true,
         _windows = {},
 }
@@ -116,24 +116,24 @@ local function feather(inst, r, color, rings, pl, pt, pr, pb)
         local outer
         if (rings or 2) > 1 then
                 outer = New("Frame", {
-                        Position = UDim2.new(0, -2 - pl, 0, -2 - pt),
-                        Size = UDim2.new(1, 4 + pl + pr, 1, 4 + pt + pb),
+                        Position = UDim2.new(0, -1 - pl, 0, -1 - pt),
+                        Size = UDim2.new(1, 2 + pl + pr, 1, 2 + pt + pb),
                         BackgroundColor3 = color,
                         BackgroundTransparency = 0.85,
                         BorderSizePixel = 0,
                         Parent = inst,
                 })
-                corner(outer, r + 2)
+                corner(outer, r + 1)
         end
         local inner = New("Frame", {
-                Position = UDim2.new(0, -1 - pl, 0, -1 - pt),
-                Size = UDim2.new(1, 2 + pl + pr, 1, 2 + pt + pb),
+                Position = UDim2.new(0, -0.5 - pl, 0, -0.5 - pt),
+                Size = UDim2.new(1, 1 + pl + pr, 1, 1 + pt + pb),
                 BackgroundColor3 = color,
-                BackgroundTransparency = 0.6,
+                BackgroundTransparency = 0.5,
                 BorderSizePixel = 0,
                 Parent = inst,
         })
-        corner(inner, r + 1)
+        corner(inner, r + 0.5)
         return inner, outer
 end
 
@@ -1069,7 +1069,7 @@ function Reborn:CreateWindow(config)
                 tween(searchWrap, 0.18, { Size = UDim2.new(0, GEO.SearchW, 0, GEO.SearchH) })
                 tween(searchWrap, 0.15, { BackgroundTransparency = 0 })
                 tween(searchBox, 0.15, { BackgroundTransparency = 0 })
-                tween(seh, 0.15, { BackgroundTransparency = 0.6 })
+                tween(seh, 0.15, { BackgroundTransparency = 0.5 })
                 tween(seh2, 0.15, { BackgroundTransparency = 0.85 })
                 searchBox:CaptureFocus()
         end
@@ -2537,7 +2537,7 @@ function Reborn:CreateWindow(config)
                         if ic then tween(ic, 0.12, { ImageColor3 = active and theme.Text or theme.TextMuted }) end
                         tween(btn, 0.12, { BackgroundTransparency = active and 0 or 1 })
                         tween(btn, 0.12, { TextColor3 = active and theme.Text or theme.TextMuted })
-                        tween(tbh, 0.12, { BackgroundTransparency = active and 0.6 or 1 })
+                        tween(tbh, 0.12, { BackgroundTransparency = active and 0.5 or 1 })
                         tween(tbh2, 0.12, { BackgroundTransparency = active and 0.85 or 1 })
                         btn.Font = active and F.Semibold or F.Medium
                 end
@@ -2545,7 +2545,7 @@ function Reborn:CreateWindow(config)
                         if not page.Visible then
                                 tween(btn, 0.12, { BackgroundTransparency = 0 })
                                 tween(btn, 0.12, { TextColor3 = theme.Text })
-                                tween(tbh, 0.12, { BackgroundTransparency = 0.6 })
+                                tween(tbh, 0.12, { BackgroundTransparency = 0.5 })
                                 tween(tbh2, 0.12, { BackgroundTransparency = 0.85 })
                                 if ic then tween(ic, 0.12, { ImageColor3 = theme.Text }) end
                         end
