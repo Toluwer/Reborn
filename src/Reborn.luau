@@ -4,7 +4,7 @@ local TextService = game:GetService("TextService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.7.8",
+        Version = "0.7.9",
         NotificationsEnabled = true,
         _windows = {},
 }
@@ -445,7 +445,7 @@ local function buildToastLayer(gui, theme)
                 local desc = tostring(cfg.Description or "")
                 if desc == "" then return 38 end
                 local lines = 1
-                local w = measureText(desc, 12)
+                local w = measureText(desc, 12, F.Regular)
                 lines = math.max(1, math.ceil(w / math.max(GEO.ToastW - 39, 40)))
                 return 22 + math.max(16, 18 + (lines * 15 + 4))
         end
@@ -1660,7 +1660,7 @@ function Reborn:CreateWindow(config)
                 local function fit()
                         local vw = clamp(measureText(tostring(dd.Value), 13, F.Medium), 24, 160)
                         val.Size = UDim2.new(0, vw, 0, 16)
-                        lbl.Size = UDim2.new(1, -(GEO.RowPad + 49 + vw), 0, 16)
+                        lbl.Size = UDim2.new(1, -(GEO.RowPad + 47 + vw), 0, 16)
                 end
 
                 local function setOpen(o)
@@ -1774,7 +1774,7 @@ function Reborn:CreateWindow(config)
                 local ok, code = pcall(function()
                         return Enum.KeyCode[joined]
                 end)
-                if ok and code then return code, nil end
+                if ok and code and code ~= Enum.KeyCode.None then return code, nil end
                 return nil, nil
         end
 
@@ -1819,8 +1819,8 @@ function Reborn:CreateWindow(config)
                         Parent = chip,
                 })
                 local function fitChip()
-                        local w = math.max(GEO.ChipMinW, measureText(txt.Text, 11, F.Mono) + 18)
-                        chip.Size = UDim2.new(0, rnd(w), 0, GEO.ChipH)
+                        local w = rnd(math.max(GEO.ChipMinW, measureText(txt.Text, 11, F.Mono) + 18))
+                        chip.Size = UDim2.new(0, w, 0, GEO.ChipH)
                         lbl.Size = UDim2.new(1, -(GEO.RowPad + 22 + w), 0, 16)
                 end
                 txt:GetPropertyChangedSignal("Text"):Connect(fitChip)
@@ -1910,9 +1910,9 @@ function Reborn:CreateWindow(config)
         local function addColorPicker(section, cfg)
                 cfg = cfg or {}
                 local row = makeRow(section, GEO.RowH)
-                rowLabel(row, cfg.Text, 118)
-
                 local hexW = rnd(math.max(44, measureText("#0070F3", 12, F.Mono)))
+                rowLabel(row, cfg.Text, hexW + 9 + GEO.Swatch + 22)
+
                 local trigger = New("TextButton", {
                         AnchorPoint = Vector2.new(1, 0.5),
                         Position = UDim2.new(1, -GEO.RowPad, 0.5, 0),
@@ -2412,9 +2412,9 @@ function Reborn:CreateWindow(config)
                                 Parent = bd,
                         })
                         corner(bdFace, 3)
-                        padding(bd, 2, 5, 2, 5)
                         New("TextLabel", {
-                                Size = UDim2.new(1, 0, 1, 0),
+                                Position = UDim2.new(0, 5, 0, 2),
+                                Size = UDim2.new(1, -10, 1, -4),
                                 BackgroundTransparency = 1,
                                 Font = F.Bold,
                                 TextSize = 10,
@@ -2462,6 +2462,7 @@ function Reborn:CreateWindow(config)
                 })
                 corner(btn, 8)
                 local padL = 12
+                local ic = nil
                 if iconName and ICONS[iconName] then
                         ic = icon(btn, iconName, 16, theme.TextMuted)
                         ic.AnchorPoint = Vector2.new(0, 0.5)
@@ -2593,7 +2594,7 @@ function Reborn:CreateWindow(config)
                 if not gameProcessed then
                         for _, kb in ipairs(state.keybinds) do
                                 local matched = false
-                                if kb.KeyCode and input.KeyCode == kb.KeyCode then matched = true end
+                                if kb.KeyCode and kb.KeyCode ~= Enum.KeyCode.None and input.KeyCode == kb.KeyCode then matched = true end
                                 if kb.UserInputType and input.UserInputType == kb.UserInputType then matched = true end
                                 if matched and kb.Callback then
                                         kb.Callback(kb.Name, input, gameProcessed)
