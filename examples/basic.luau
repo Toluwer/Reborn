@@ -45,7 +45,7 @@ Core:Slider({
 
 local Combat = Window:Tab("Combat", "crosshair")
 
-local Aim = Combat:Section("Aim assist", "Beta")
+local Aim = Combat:Section("Aim assist")
 Aim:Toggle({
         Text = "Enabled",
         Value = true,
