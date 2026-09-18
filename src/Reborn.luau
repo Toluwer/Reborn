@@ -4,7 +4,7 @@ local TextService = game:GetService("TextService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.7.9",
+        Version = "0.7.10",
         NotificationsEnabled = true,
         _windows = {},
 }
@@ -408,6 +408,13 @@ local function randomName()
         return table.concat(t)
 end
 
+local orderBase = math.random(100000, 800000)
+local orderSeq = 0
+local function nextOrder()
+        orderSeq = orderSeq + 1
+        return math.min(orderBase + orderSeq, 900000)
+end
+
 local function protectGui(g)
         pcall(function()
                 if syn and syn.protect_gui then syn.protect_gui(g) end
@@ -615,7 +622,7 @@ function Reborn:CreateWindow(config)
                 ResetOnSpawn = false,
                 IgnoreGuiInset = true,
                 ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-                DisplayOrder = math.random(100000, 900000),
+                DisplayOrder = nextOrder(),
         })
         gui:SetAttribute(MARK, true)
         if not viaHidden then protectGui(gui) end
@@ -780,6 +787,7 @@ function Reborn:CreateWindow(config)
                 BackgroundColor3 = theme.LineStrong,
                 BackgroundTransparency = 1,
                 BorderSizePixel = 0,
+                Visible = false,
                 Parent = cluster,
         })
         corner(searchWrap, 6)
@@ -793,6 +801,8 @@ function Reborn:CreateWindow(config)
                 Text = "",
                 PlaceholderText = "search…",
                 PlaceholderColor3 = theme.TextFaint,
+                SelectionColor3 = theme.Accent,
+                CaretColor3 = theme.Text,
                 Font = F.Regular,
                 TextSize = 12,
                 TextColor3 = theme.Text,
@@ -867,7 +877,7 @@ function Reborn:CreateWindow(config)
                 BackgroundTransparency = 1,
                 BorderSizePixel = 0,
                 ScrollBarThickness = 8,
-                ScrollBarImageColor3 = Color3.fromRGB(46, 46, 46),
+                ScrollBarImageColor3 = theme.LineStrong,
                 ScrollingDirection = Enum.ScrollingDirection.Y,
                 CanvasSize = UDim2.new(0, 0, 0, 0),
                 AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -1052,7 +1062,10 @@ function Reborn:CreateWindow(config)
                 end
         end
 
+        local searchOpen = false
         local function openSearch()
+                searchOpen = true
+                searchWrap.Visible = true
                 tween(searchWrap, 0.18, { Size = UDim2.new(0, GEO.SearchW, 0, GEO.SearchH) })
                 tween(searchWrap, 0.15, { BackgroundTransparency = 0 })
                 tween(searchBox, 0.15, { BackgroundTransparency = 0 })
@@ -1061,6 +1074,7 @@ function Reborn:CreateWindow(config)
         end
 
         local function closeSearch()
+                searchOpen = false
                 searchBox.Text = ""
                 applyFilter("")
                 searchBox:ReleaseFocus()
@@ -1068,6 +1082,11 @@ function Reborn:CreateWindow(config)
                 tween(searchWrap, 0.15, { BackgroundTransparency = 1 })
                 tween(searchBox, 0.15, { BackgroundTransparency = 1 })
                 tween(seh, 0.15, { BackgroundTransparency = 1 })
+                task.delay(0.2, function()
+                        if not searchOpen and searchWrap.Size.X.Offset <= 0 then
+                                searchWrap.Visible = false
+                        end
+                end)
         end
 
         searchBtn.Activated:Connect(function()
@@ -2236,6 +2255,8 @@ function Reborn:CreateWindow(config)
                         Text = tostring(cfg.Value or ""),
                         PlaceholderText = tostring(cfg.Placeholder or ""),
                         PlaceholderColor3 = theme.TextFaint,
+                        SelectionColor3 = theme.Accent,
+                        CaretColor3 = theme.Text,
                         Font = F.Regular,
                         TextSize = 13,
                         TextColor3 = theme.Text,
