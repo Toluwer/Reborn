@@ -4,7 +4,7 @@ local TextService = game:GetService("TextService")
 local Players = game:GetService("Players")
 
 local Reborn = {
-        Version = "0.7.10",
+        Version = "0.7.11",
         NotificationsEnabled = true,
         _windows = {},
 }
@@ -801,8 +801,6 @@ function Reborn:CreateWindow(config)
                 Text = "",
                 PlaceholderText = "search…",
                 PlaceholderColor3 = theme.TextFaint,
-                SelectionColor3 = theme.Accent,
-                CaretColor3 = theme.Text,
                 Font = F.Regular,
                 TextSize = 12,
                 TextColor3 = theme.Text,
@@ -2255,8 +2253,6 @@ function Reborn:CreateWindow(config)
                         Text = tostring(cfg.Value or ""),
                         PlaceholderText = tostring(cfg.Placeholder or ""),
                         PlaceholderColor3 = theme.TextFaint,
-                        SelectionColor3 = theme.Accent,
-                        CaretColor3 = theme.Text,
                         Font = F.Regular,
                         TextSize = 13,
                         TextColor3 = theme.Text,

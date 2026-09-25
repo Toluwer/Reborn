@@ -2,7 +2,7 @@
 
 A dark, minimalist UI library for Roblox, implemented in a single Luau module.
 
-![version](https://img.shields.io/badge/version-v0.7.10-0070f3)
+![version](https://img.shields.io/badge/version-v0.7.11-0070f3)
 
 ## Features
 
