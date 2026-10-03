@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 
 local Reborn = {
-        Version = "0.8.1",
+        Version = "0.8.2",
         NotificationsEnabled = true,
         _windows = {},
         _configs = {},
@@ -77,7 +77,6 @@ local GEO = {
         FieldW       = 180,
         FieldH       = 30,
         ToastW       = 294,
-        Launcher     = 46,
         PillH        = 34,
         GridGap      = 8,
 }
@@ -889,41 +888,6 @@ function Reborn:CreateWindow(config)
                 Parent = bodyGroup,
         })
 
-        local launcher = New("Frame", {
-                AnchorPoint = Vector2.new(1, 1),
-                Position = UDim2.new(1, -22, 1, -22),
-                Size = UDim2.new(0, GEO.Launcher, 0, GEO.Launcher),
-                BackgroundColor3 = theme.LineStrong,
-                BorderSizePixel = 0,
-                Visible = false,
-                ZIndex = 40,
-                Parent = gui,
-        })
-        corner(launcher, GEO.Launcher / 2)
-        feather(launcher, GEO.Launcher / 2, theme.LineStrong)
-        local launcherFace = New("Frame", {
-                Position = UDim2.new(0, 1, 0, 1),
-                Size = UDim2.new(1, -2, 1, -2),
-                BackgroundColor3 = theme.Overlay,
-                BorderSizePixel = 0,
-                Parent = launcher,
-        })
-        corner(launcherFace, GEO.Launcher / 2 - 1)
-        New("Frame", {
-                Position = UDim2.new(0, 15, 0, 15),
-                Size = UDim2.new(0, 14, 0, 14),
-                Rotation = 45,
-                BackgroundColor3 = theme.Accent,
-                BorderSizePixel = 0,
-                Parent = launcherFace,
-        })
-        launcher.MouseEnter:Connect(function()
-                tween(launcherFace, 0.12, { BackgroundColor3 = theme.Chip })
-        end)
-        launcher.MouseLeave:Connect(function()
-                tween(launcherFace, 0.12, { BackgroundColor3 = theme.Overlay })
-        end)
-
         local pillTitleText = tostring(config.Title or "Reborn")
         local pillTitleW = rnd(measureText(pillTitleText, 13, F.Semibold))
         local pillRestW = 41 + pillTitleW
@@ -949,7 +913,7 @@ function Reborn:CreateWindow(config)
                 BorderSizePixel = 0,
                 Parent = pill,
         })
-        New("Frame", {
+        local pillDiamond = New("Frame", {
                 Position = UDim2.new(0, 12, 0, 12),
                 Size = UDim2.new(0, 9, 0, 9),
                 Rotation = 45,
@@ -957,7 +921,7 @@ function Reborn:CreateWindow(config)
                 BorderSizePixel = 0,
                 Parent = pillContent,
         })
-        New("TextLabel", {
+        local pillTitle = New("TextLabel", {
                 AnchorPoint = Vector2.new(0, 0.5),
                 Position = UDim2.new(0, 29, 0.5, 0),
                 Size = UDim2.new(0, pillTitleW, 0, 16),
@@ -983,6 +947,7 @@ function Reborn:CreateWindow(config)
                 Text = "Click to open",
                 Parent = pillContent,
         })
+        local pillClear = false
         local function snapPillRest()
                 pill.Size = UDim2.new(0, pillRestW, 0, GEO.PillH)
                 pillContent.Size = UDim2.new(0, pillRestW, 1, 0)
@@ -996,7 +961,7 @@ function Reborn:CreateWindow(config)
                 local w = 39 + pillTitleW + rnd(measureText(hint, 12, F.Regular)) + 12
                 tween(pill, 0.2, { Size = UDim2.new(0, w, 0, GEO.PillH) }, Enum.EasingStyle.Quint)
                 tween(pillContent, 0.2, { Size = UDim2.new(0, w, 1, 0) }, Enum.EasingStyle.Quint)
-                tween(pillHint, 0.2, { TextTransparency = 0 })
+                tween(pillHint, 0.2, { TextTransparency = pillClear and 0.55 or 0 })
                 tween(pill, 0.2, { BackgroundColor3 = theme.Overlay })
         end)
         pill.MouseLeave:Connect(function()
@@ -1080,11 +1045,14 @@ function Reborn:CreateWindow(config)
 
         local function setMinimized(m)
                 if state.min == m then return end
+                if m and state.closed then return end
                 state.min = m
                 if m then
                         closeAllPops()
                         if searchWrap.Size.X.Offset > 0 then closeSearch() end
                         grip.Visible = false
+                        header.Visible = false
+                        bodyGroup.Visible = false
                         minIcon.Visible = false
                         plusIcon.Visible = true
                         state.minPos = { x = windowFrame.Position.X.Offset, y = windowFrame.Position.Y.Offset }
@@ -1109,6 +1077,8 @@ function Reborn:CreateWindow(config)
                         end)
                 else
                         grip.Visible = true
+                        header.Visible = true
+                        bodyGroup.Visible = true
                         minIcon.Visible = true
                         plusIcon.Visible = false
                         killTween(windowFrame, "Position")
@@ -1144,6 +1114,8 @@ function Reborn:CreateWindow(config)
                         state.min = false
                         pill.Visible = false
                         grip.Visible = true
+                        header.Visible = true
+                        bodyGroup.Visible = true
                         minIcon.Visible = true
                         plusIcon.Visible = false
                         killTween(windowFrame, "Position")
@@ -1166,17 +1138,43 @@ function Reborn:CreateWindow(config)
                 task.delay(0.2, function()
                         if state.closed then windowFrame.Visible = false end
                 end)
-                launcher.Visible = true
-                launcher.Position = UDim2.new(1, -22, 1, -4)
-                tween(launcher, 0.2, { Position = UDim2.new(1, -22, 1, -22) }, Enum.EasingStyle.Quint)
         end
 
         minBtn.Activated:Connect(function()
                 setMinimized(not state.min)
         end)
 
+        local pillHoldGen = 0
+        local pillHoldFired = false
+        pill.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        pillHoldFired = false
+                        pillHoldGen = pillHoldGen + 1
+                        local gen = pillHoldGen
+                        task.delay(3, function()
+                                if gen ~= pillHoldGen or state.min ~= true or state.closed then return end
+                                pillHoldFired = true
+                                pillClear = not pillClear
+                                local bg = pillClear and 0.45 or 0
+                                local tx = pillClear and 0.4 or 0
+                                tween(pill, 0.5, { BackgroundTransparency = bg }, Enum.EasingStyle.Quint)
+                                tween(pillDiamond, 0.5, { BackgroundTransparency = bg }, Enum.EasingStyle.Quint)
+                                tween(pillTitle, 0.5, { TextTransparency = tx }, Enum.EasingStyle.Quint)
+                                if pillHint.TextTransparency < 1 then
+                                        tween(pillHint, 0.5, { TextTransparency = pillClear and 0.55 or 0 }, Enum.EasingStyle.Quint)
+                                end
+                        end)
+                end
+        end)
+        connect(UserInputService.InputEnded, function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        pillHoldGen = pillHoldGen + 1
+                end
+        end)
         pill.Activated:Connect(function()
-                setMinimized(false)
+                if not pillHoldFired then
+                        setMinimized(false)
+                end
         end)
 
         local function reopen()
@@ -1189,16 +1187,7 @@ function Reborn:CreateWindow(config)
                 local tx, ty = windowFrame.Position.X.Offset, windowFrame.Position.Y.Offset
                 windowFrame.Position = UDim2.new(0, tx, 0, ty + 14)
                 tween(windowFrame, 0.22, { Position = UDim2.new(0, tx, 0, ty) }, Enum.EasingStyle.Quint)
-                task.delay(0.2, function()
-                        if not state.closed then launcher.Visible = false end
-                end)
         end
-
-        launcher.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                        reopen()
-                end
-        end)
 
         local function applyFilter(q)
                 q = tostring(q or ""):lower()
@@ -3203,7 +3192,7 @@ function Reborn:CreateWindow(config)
                 elseif state.closed then
                         reopen()
                 else
-                        closeWindow()
+                        setMinimized(true)
                 end
         end
 
