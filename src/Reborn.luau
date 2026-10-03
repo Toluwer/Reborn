@@ -2,11 +2,13 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local TextService = game:GetService("TextService")
 local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
 
 local Reborn = {
-        Version = "0.7.11",
+        Version = "0.8.0",
         NotificationsEnabled = true,
         _windows = {},
+        _configs = {},
 }
 
 local DEFAULT_THEME = {
@@ -553,7 +555,10 @@ local function buildToastLayer(gui, theme)
                 task.defer(function()
                         if not item.closed then relayout(true) end
                 end)
-                task.delay(cfg.Duration or 3.6, function() dismiss(item) end)
+                local dur = tonumber(cfg.Duration) or 3.6
+                if dur > 0 and dur < 3600 then
+                        task.delay(dur, function() dismiss(item) end)
+                end
                 return item
         end
 
@@ -662,6 +667,7 @@ function Reborn:CreateWindow(config)
                 searchRows = {},
                 sections = {},
                 tabs = {},
+                elements = {},
         }
 
         local Window = nil
@@ -729,7 +735,7 @@ function Reborn:CreateWindow(config)
                 BackgroundTransparency = 1,
                 Parent = header,
         })
-        New("TextLabel", {
+        local titleLbl = New("TextLabel", {
                 AnchorPoint = Vector2.new(0, 0.5),
                 Position = UDim2.new(0, 0, 0.5, 0),
                 Size = UDim2.new(0, 0, 0, 16),
@@ -1185,6 +1191,141 @@ function Reborn:CreateWindow(config)
                 end
         end
 
+        local tipWrap = New("Frame", {
+                Size = UDim2.new(0, 0, 0, 28),
+                BackgroundColor3 = theme.LineStrong,
+                BorderSizePixel = 0,
+                Visible = false,
+                ZIndex = 60,
+                Parent = gui,
+        })
+        corner(tipWrap, 6)
+        local tph = feather(tipWrap, 6, theme.LineStrong)
+        local tipFace = New("Frame", {
+                Position = UDim2.new(0, 1, 0, 1),
+                Size = UDim2.new(1, -2, 1, -2),
+                BackgroundColor3 = theme.Overlay,
+                BorderSizePixel = 0,
+                Parent = tipWrap,
+        })
+        corner(tipFace, 5)
+        local tipTxt = New("TextLabel", {
+                Position = UDim2.new(0, 10, 0, 0),
+                Size = UDim2.new(1, -20, 1, 0),
+                BackgroundTransparency = 1,
+                Font = F.Regular,
+                TextSize = 12,
+                TextColor3 = theme.TextMuted,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                Text = "",
+                Parent = tipFace,
+        })
+
+        local tipState = { gen = 0, armed = false }
+        local function hideTip()
+                tipState.gen = tipState.gen + 1
+                if not tipState.armed then return end
+                tipState.armed = false
+                local gen = tipState.gen
+                tween(tipWrap, 0.1, { BackgroundTransparency = 1 })
+                tween(tph, 0.1, { BackgroundTransparency = 1 })
+                tween(tipTxt, 0.1, { TextTransparency = 1 })
+                task.delay(0.12, function()
+                        if tipState.gen == gen and tipWrap.Parent then tipWrap.Visible = false end
+                end)
+        end
+        local function showTip(text, row)
+                local clean = tostring(text or "")
+                if clean == "" then return end
+                local rp, rs = row.AbsolutePosition, row.AbsoluteSize
+                local vy = viewportSize()
+                local tw = clamp(measureText(clean, 12, F.Regular) + 22, 44, 320)
+                local x = rp.X + rs.X + 12
+                if x + tw > vy.X - 10 then x = rp.X - 12 - tw end
+                if x < 10 then x = 10 end
+                local cy = clamp(rp.Y + rs.Y / 2, 22, vy.Y - 22)
+                tipTxt.Text = clean
+                tipWrap.Size = UDim2.new(0, tw, 0, 28)
+                tipWrap.Position = UDim2.new(0, x, 0, cy + 4)
+                tipWrap.Rotation = 0
+                tipWrap.Visible = true
+                tipWrap.BackgroundTransparency = 0
+                tph.BackgroundTransparency = 0.5
+                tipTxt.TextTransparency = 0
+                tween(tipWrap, 0.14, { Position = UDim2.new(0, x, 0, cy) }, Enum.EasingStyle.Quint)
+        end
+        local function tipHover(row, cfg, hosts)
+                for _, host in ipairs(hosts) do
+                        host.MouseEnter:Connect(function()
+                                if cfg.Tooltip and tostring(cfg.Tooltip) ~= "" then
+                                        tipState.gen = tipState.gen + 1
+                                        local gen = tipState.gen
+                                        task.delay(0.55, function()
+                                                if tipState.gen == gen then
+                                                        tipState.armed = true
+                                                        showTip(cfg.Tooltip, row)
+                                                end
+                                        end)
+                                end
+                        end)
+                        host.MouseLeave:Connect(function()
+                                tipState.gen = tipState.gen + 1
+                                hideTip()
+                        end)
+                end
+        end
+
+        local function destroyElement(entry)
+                for i, e in ipairs(state.elements) do
+                        if e == entry then
+                                table.remove(state.elements, i)
+                                break
+                        end
+                end
+                for i = #state.searchRows, 1, -1 do
+                        if state.searchRows[i].frame == entry.row then table.remove(state.searchRows, i) end
+                end
+                if entry.kind == "Keybind" then
+                        for i = #state.keybinds, 1, -1 do
+                                if state.keybinds[i] == entry.el then table.remove(state.keybinds, i) end
+                        end
+                        if state.listening == entry.el then state.listening = nil end
+                end
+                if entry.pop then
+                        for i = #state.openPops, 1, -1 do
+                                if state.openPops[i].pop == entry.pop then table.remove(state.openPops, i) end
+                        end
+                end
+                if entry.row then pcall(function() entry.row:Destroy() end) end
+                if entry.pop then pcall(function() entry.pop:Destroy() end) end
+        end
+
+        local function finishElement(kind, el, cfg, row, hosts, pop)
+                el._kind = kind
+                el.Flag = cfg.Flag
+                local entry = { kind = kind, el = el, cfg = cfg, row = row, pop = pop }
+                function el:SetVisible(v)
+                        v = v and true or false
+                        if row then row.Visible = v end
+                        if pop and not v then pop.Visible = false end
+                        entry.hidden = not v
+                end
+                function el:SetTooltip(text)
+                        cfg.Tooltip = text
+                        if not text or tostring(text) == "" then hideTip() end
+                end
+                function el:Destroy()
+                        hideTip()
+                        destroyElement(entry)
+                end
+                table.insert(state.elements, entry)
+                if hosts and #hosts > 0 then
+                        tipHover(row, cfg, hosts)
+                end
+                return el
+        end
+
         local lastCanvasY = 0
         content:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
                 local cy = content.CanvasPosition.Y
@@ -1464,7 +1605,7 @@ function Reborn:CreateWindow(config)
                         value = v and true or false
                         render(fire and true or false)
                 end
-                return tog
+                return finishElement("Toggle", tog, cfg, row, { btn })
         end
 
         local function addSlider(section, cfg)
@@ -1549,12 +1690,17 @@ function Reborn:CreateWindow(config)
                 local suffix = cfg.Suffix or ""
                 local sld = { Value = value }
 
+                local renderTries = 0
                 local function render()
                         local tw = track.AbsoluteSize.X
                         if tw < GEO.HandleD then
-                                task.defer(render)
+                                if renderTries < 8 then
+                                        renderTries = renderTries + 1
+                                        task.defer(render)
+                                end
                                 return
                         end
+                        renderTries = 0
                         local p = (value - min) / (max - min)
                         local px = rnd(p * tw)
                         fill.Size = UDim2.new(0, px, 0, GEO.RailH)
@@ -1598,7 +1744,7 @@ function Reborn:CreateWindow(config)
                         render()
                         if fire and cfg.Callback then cfg.Callback(value) end
                 end
-                return sld
+                return finishElement("Slider", sld, cfg, row, { track })
         end
 
         local function addDropdown(section, cfg)
@@ -1626,6 +1772,22 @@ function Reborn:CreateWindow(config)
                 })
 
                 local options = cfg.Options or {}
+                local multi = cfg.Multi and true or false
+                local origOf = {}
+                local optTexts = {}
+                for i, opt in ipairs(options) do
+                        local t = tostring(opt)
+                        optTexts[i] = t
+                        if origOf[t] == nil then origOf[t] = opt end
+                end
+                local sel = {}
+                local dd
+                if multi then
+                        for _, v in ipairs(cfg.Value or {}) do sel[tostring(v)] = true end
+                        dd = { Value = {} }
+                else
+                        dd = { Value = (cfg.Value ~= nil and cfg.Value) or options[1] or "" }
+                end
                 local popH = 10 + math.max(#options, 1) * GEO.OptH
                 local pop = New("Frame", {
                         Position = UDim2.new(0, 0, 1, 6),
@@ -1672,10 +1834,33 @@ function Reborn:CreateWindow(config)
                                 Parent = listScroll,
                         })
                 end
-                local dd = { Value = cfg.Value or options[1] or "" }
                 local optBtns = {}
+                local function syncValue()
+                        local vals = {}
+                        for i, opt in ipairs(options) do
+                                if sel[optTexts[i]] then table.insert(vals, origOf[optTexts[i]]) end
+                        end
+                        dd.Value = vals
+                end
+                local function displayText()
+                        if multi then
+                                local names = {}
+                                for i = 1, #optTexts do
+                                        if sel[optTexts[i]] then table.insert(names, optTexts[i]) end
+                                end
+                                return table.concat(names, ", ")
+                        end
+                        return tostring(dd.Value)
+                end
+                local function refreshChecks()
+                        for _, other in ipairs(optBtns) do
+                                local on = multi and (sel[other._text] and true or false) or (other._text == tostring(dd.Value))
+                                other._chk.Visible = on
+                                other._txt.TextColor3 = on and theme.Text or theme.TextMuted
+                        end
+                end
                 local function fit()
-                        local vw = clamp(measureText(tostring(dd.Value), 13, F.Medium), 24, 160)
+                        local vw = clamp(measureText(displayText(), 13, F.Medium), 24, 160)
                         val.Size = UDim2.new(0, vw, 0, 16)
                         lbl.Size = UDim2.new(1, -(GEO.RowPad + 47 + vw), 0, 16)
                 end
@@ -1695,7 +1880,7 @@ function Reborn:CreateWindow(config)
                         else
                                 tween(pop, 0.12, { Position = UDim2.new(0, pop.Position.X.Offset, 0, pop.Position.Y.Offset + 4) })
                                 task.delay(0.14, function()
-                                        if not dd._open then pop.Visible = false end
+                                        if not dd._open and pop.Parent then pop.Visible = false end
                                 end)
                                 tween(chev, 0.18, { Rotation = 0 })
                                 unregisterPop(pop)
@@ -1740,46 +1925,69 @@ function Reborn:CreateWindow(config)
                                 tween(ot, 0.1, { TextColor3 = theme.TextMuted })
                         end)
                         ob.Activated:Connect(function()
-                                dd.Value = otext
-                                val.Text = otext
-                                fit()
-                                for _, other in ipairs(optBtns) do
-                                        local sel = other._text == otext
-                                        other._chk.Visible = sel
-                                        other._txt.TextColor3 = sel and theme.Text or theme.TextMuted
+                                if multi then
+                                        if sel[otext] then sel[otext] = nil else sel[otext] = true end
+                                        syncValue()
+                                        val.Text = displayText()
+                                        fit()
+                                        refreshChecks()
+                                        local out = {}
+                                        for i2, v2 in ipairs(dd.Value) do out[i2] = v2 end
+                                        if cfg.Callback then cfg.Callback(out) end
+                                else
+                                        dd.Value = origOf[otext] ~= nil and origOf[otext] or otext
+                                        val.Text = otext
+                                        fit()
+                                        for _, other in ipairs(optBtns) do
+                                                local on = other._text == otext
+                                                other._chk.Visible = on
+                                                other._txt.TextColor3 = on and theme.Text or theme.TextMuted
+                                        end
+                                        setOpen(false)
+                                        if cfg.Callback then cfg.Callback(dd.Value) end
                                 end
-                                setOpen(false)
-                                if cfg.Callback then cfg.Callback(otext) end
                         end)
                         table.insert(optBtns, { _btn = ob, _txt = ot, _chk = chk, _text = otext })
-                        if otext == tostring(dd.Value) then
-                                val.Text = otext
+                        if (multi and sel[otext]) or (not multi and otext == tostring(dd.Value)) then
+                                if not multi then val.Text = otext end
                                 ot.TextColor3 = theme.Text
                                 chk.Visible = true
                         end
                 end
+                if multi then syncValue() end
                 fit()
 
                 local btn = overlayBtn(row)
                 btn.Activated:Connect(function()
                         setOpen(not dd._open)
                 end)
-                registerSearch(row, cfg.Text, section)
+                local searchText = tostring(cfg.Text or "")
+                if #optTexts > 0 then searchText = searchText .. " " .. table.concat(optTexts, " ") end
+                registerSearch(row, searchText, section)
 
                 function dd:Set(v, fire)
-                        local vtext = tostring(v)
-                        dd.Value = vtext
-                        val.Text = vtext
-                        fit()
-                        for _, other in ipairs(optBtns) do
-                                local sel = other._text == vtext
-                                other._chk.Visible = sel
-                                other._txt.TextColor3 = sel and theme.Text or theme.TextMuted
+                        if multi then
+                                sel = {}
+                                for _, x in ipairs(type(v) == "table" and v or {}) do sel[tostring(x)] = true end
+                                syncValue()
+                        else
+                                dd.Value = v ~= nil and v or ""
                         end
-                        setOpen(false)
-                        if fire and cfg.Callback then cfg.Callback(vtext) end
+                        val.Text = displayText()
+                        fit()
+                        refreshChecks()
+                        if not multi then setOpen(false) end
+                        if fire and cfg.Callback then
+                                if multi then
+                                        local out = {}
+                                        for i2, v2 in ipairs(dd.Value) do out[i2] = v2 end
+                                        cfg.Callback(out)
+                                else
+                                        cfg.Callback(dd.Value)
+                                end
+                        end
                 end
-                return dd
+                return finishElement("Dropdown", dd, cfg, row, { btn }, pop)
         end
 
         local function bindFromString(s)
@@ -1843,11 +2051,15 @@ function Reborn:CreateWindow(config)
                 txt:GetPropertyChangedSignal("Text"):Connect(fitChip)
                 task.defer(fitChip)
 
+                local mode = tostring(cfg.Mode or "Always")
+                if mode ~= "Toggle" and mode ~= "Hold" then mode = "Always" end
                 local kb = {
                         Name = cfg.Value or "None",
                         KeyCode = nil,
                         UserInputType = nil,
                         Callback = cfg.Callback,
+                        Mode = mode,
+                        Active = false,
                 }
                 do
                         local code, uit = bindFromString(kb.Name)
@@ -1880,6 +2092,7 @@ function Reborn:CreateWindow(config)
                         kb.Name = name
                         kb.KeyCode = keyCode
                         kb.UserInputType = uit
+                        kb.Active = false
                         txt.Text = name
                         stopListen()
                 end
@@ -1890,6 +2103,7 @@ function Reborn:CreateWindow(config)
                         state.listening = kb
                         kb._cancel = cancelListen
                         kb._commit = commitBind
+                        kb._chip = chip
                         kb._prev = txt.Text
                         txt.Text = "· · ·"
                         tween(chip, 0.12, { BackgroundColor3 = theme.Accent })
@@ -1919,9 +2133,10 @@ function Reborn:CreateWindow(config)
                         kb.Name = tostring(name)
                         kb.KeyCode = code
                         kb.UserInputType = uit
+                        kb.Active = false
                         txt.Text = tostring(name)
                 end
-                return kb
+                return finishElement("Keybind", kb, cfg, row, { chip })
         end
 
         local function addColorPicker(section, cfg)
@@ -2210,7 +2425,7 @@ function Reborn:CreateWindow(config)
                                 active = nil
                                 tween(pop, 0.12, { Position = UDim2.new(0, pop.Position.X.Offset, 0, pop.Position.Y.Offset + 4) })
                                 task.delay(0.14, function()
-                                        if not open then pop.Visible = false end
+                                        if not open and pop.Parent then pop.Visible = false end
                                 end)
                                 unregisterPop(pop)
                         end
@@ -2226,7 +2441,7 @@ function Reborn:CreateWindow(config)
                         h, s, v = Color3.toHSV(c)
                         render(fire and true or false)
                 end
-                return cp
+                return finishElement("ColorPicker", cp, cfg, row, { trigger }, pop)
         end
 
         local function addInput(section, cfg)
@@ -2285,7 +2500,7 @@ function Reborn:CreateWindow(config)
                         inp.Text = box.Text
                         if cfg.Live and cfg.Callback then cfg.Callback(box.Text, false) end
                 end)
-                return inp
+                return finishElement("Input", inp, cfg, row, { field, box })
         end
 
         local function addButton(section, cfg)
@@ -2348,7 +2563,7 @@ function Reborn:CreateWindow(config)
                 function b:Set(text)
                         btn.Text = tostring(text)
                 end
-                return b
+                return finishElement("Button", b, cfg, shell, { btn })
         end
 
         local function addParagraph(section, cfg)
@@ -2372,7 +2587,7 @@ function Reborn:CreateWindow(config)
                 function p:Set(text)
                         lbl.Text = tostring(text)
                 end
-                return p
+                return finishElement("Paragraph", p, cfg, lbl, { lbl })
         end
 
         local function newSection(tab, name, badge)
@@ -2603,6 +2818,8 @@ function Reborn:CreateWindow(config)
                 if state.listening and input.UserInputType == Enum.UserInputType.Keyboard then
                         if input.KeyCode == Enum.KeyCode.Escape then
                                 state.listening._cancel()
+                        elseif input.KeyCode == Enum.KeyCode.Backspace then
+                                state.listening._commit("None", nil, nil)
                         else
                                 state.listening._commit(keyDisplayName(input.KeyCode.Name), input.KeyCode, nil)
                         end
@@ -2614,7 +2831,15 @@ function Reborn:CreateWindow(config)
                                 if kb.KeyCode and kb.KeyCode ~= Enum.KeyCode.None and input.KeyCode == kb.KeyCode then matched = true end
                                 if kb.UserInputType and input.UserInputType == kb.UserInputType then matched = true end
                                 if matched and kb.Callback then
-                                        kb.Callback(kb.Name, input, gameProcessed)
+                                        if kb.Mode == "Toggle" then
+                                                kb.Active = not kb.Active
+                                                kb.Callback(kb.Active, kb.Name, input, gameProcessed)
+                                        elseif kb.Mode == "Hold" then
+                                                kb.Active = true
+                                                kb.Callback(true, kb.Name, input, gameProcessed)
+                                        else
+                                                kb.Callback(kb.Name, input, gameProcessed)
+                                        end
                                 end
                         end
                 end
@@ -2628,9 +2853,6 @@ function Reborn:CreateWindow(config)
                         end
                         if state.listening and not gameProcessed then
                                 local chip = state.listening._chip
-                                if chip == nil then
-                                        chip = state.listening.Chip
-                                end
                                 if chip == nil or not inRect(chip, m) then
                                         state.listening._cancel()
                                 end
@@ -2642,6 +2864,19 @@ function Reborn:CreateWindow(config)
                         else
                                 for i = #state.openPops, 1, -1 do
                                         state.openPops[i].close()
+                                end
+                        end
+                end
+        end)
+        connect(UserInputService.InputEnded, function(input, gameProcessed)
+                for _, kb in ipairs(state.keybinds) do
+                        if kb.Mode == "Hold" and kb.Active and kb.Callback then
+                                local matched = false
+                                if kb.KeyCode and kb.KeyCode ~= Enum.KeyCode.None and input.KeyCode == kb.KeyCode then matched = true end
+                                if kb.UserInputType and input.UserInputType == kb.UserInputType then matched = true end
+                                if matched then
+                                        kb.Active = false
+                                        kb.Callback(false, kb.Name, input, gameProcessed)
                                 end
                         end
                 end
@@ -2667,10 +2902,138 @@ function Reborn:CreateWindow(config)
                 applyFilter(q)
         end
 
-        function Window:SetTitle(t)
-                Window.Title = tostring(t)
-                local lbl = dragZone:FindFirstChildOfClass("TextLabel")
-                if lbl then lbl.Text = tostring(t) end
+        function Window:SetTitle(text)
+                Window.Title = tostring(text or "")
+                titleLbl.Text = Window.Title
+        end
+
+        local function sanitizeName(s)
+                return (tostring(s):gsub("[^%w%-_]", "-"))
+        end
+        local function cfgDir()
+                return "reborn/" .. sanitizeName(config.Title or "Reborn")
+        end
+        local function cfgPath(name)
+                return cfgDir() .. "/" .. sanitizeName(name or "default") .. ".json"
+        end
+        local function fsAvailable()
+                return type(writefile) == "function" and type(readfile) == "function" and type(isfile) == "function"
+        end
+
+        function Window:GetConfig()
+                local out = {}
+                for _, e in ipairs(state.elements) do
+                        local el, k, flag = e.el, e.kind, e.cfg.Flag
+                        if flag and not e.hidden then
+                                if k == "Toggle" then
+                                        out[flag] = el.Value and true or false
+                                elseif k == "Slider" then
+                                        out[flag] = el.Value
+                                elseif k == "Dropdown" then
+                                        if type(el.Value) == "table" then
+                                                local c = {}
+                                                for i, v in ipairs(el.Value) do c[i] = v end
+                                                out[flag] = c
+                                        else
+                                                out[flag] = el.Value
+                                        end
+                                elseif k == "Keybind" then
+                                        out[flag] = el.Name
+                                elseif k == "ColorPicker" then
+                                        out[flag] = el.Hex
+                                elseif k == "Input" then
+                                        out[flag] = el.Text
+                                end
+                        end
+                end
+                return out
+        end
+
+        function Window:SetConfig(vals)
+                if type(vals) ~= "table" then return end
+                for _, e in ipairs(state.elements) do
+                        local flag = e.cfg.Flag
+                        if flag and vals[flag] ~= nil then
+                                if e.kind == "Keybind" or e.kind == "Input" then
+                                        e.el:Set(vals[flag])
+                                else
+                                        e.el:Set(vals[flag], false)
+                                end
+                        end
+                end
+        end
+
+        function Window:SaveConfig(name)
+                name = tostring(name or "default")
+                local okJson, json = pcall(function() return HttpService:JSONEncode(self:GetConfig()) end)
+                if not okJson or type(json) ~= "string" then return false end
+                if fsAvailable() then
+                        if type(isfolder) == "function" and type(makefolder) == "function" then
+                                pcall(function()
+                                        if not isfolder("reborn") then makefolder("reborn") end
+                                        if not isfolder(cfgDir()) then makefolder(cfgDir()) end
+                                end)
+                        end
+                        local ok = pcall(function() writefile(cfgPath(name), json) end)
+                        if not ok then return false end
+                else
+                        Reborn._configs[cfgPath(name)] = json
+                end
+                return true
+        end
+
+        function Window:LoadConfig(name)
+                name = tostring(name or "default")
+                local json = nil
+                if fsAvailable() then
+                        local ok, content = pcall(function()
+                                if isfile(cfgPath(name)) then return readfile(cfgPath(name)) end
+                                return nil
+                        end)
+                        if ok then json = content end
+                end
+                if json == nil then json = Reborn._configs[cfgPath(name)] end
+                if type(json) ~= "string" then return nil end
+                local ok, tbl = pcall(function() return HttpService:JSONDecode(json) end)
+                if not ok or type(tbl) ~= "table" then return nil end
+                self:SetConfig(tbl)
+                return tbl
+        end
+
+        function Window:DeleteConfig(name)
+                name = tostring(name or "default")
+                Reborn._configs[cfgPath(name)] = nil
+                if fsAvailable() and type(delfile) == "function" then
+                        pcall(function()
+                                if isfile(cfgPath(name)) then delfile(cfgPath(name)) end
+                        end)
+                end
+                return true
+        end
+
+        function Window:ListConfigs()
+                local out, seen = {}, {}
+                if type(listfiles) == "function" then
+                        local ok, files = pcall(function() return listfiles(cfgDir()) end)
+                        if ok and type(files) == "table" then
+                                for _, f in ipairs(files) do
+                                        local base = tostring(f):match("([^%/\\]+)%.json$")
+                                        if base and not seen[base] then
+                                                seen[base] = true
+                                                table.insert(out, base)
+                                        end
+                                end
+                        end
+                end
+                for path in pairs(Reborn._configs) do
+                        local base = path:match("^" .. cfgDir():gsub("%W", "%%%0") .. "/(.+)%.json$")
+                        if base and not seen[base] then
+                                seen[base] = true
+                                table.insert(out, base)
+                        end
+                end
+                table.sort(out)
+                return out
         end
 
         function Window:SetVisible(v)

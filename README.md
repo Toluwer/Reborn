@@ -2,14 +2,16 @@
 
 A dark, minimalist UI library for Roblox, implemented in a single Luau module.
 
-![version](https://img.shields.io/badge/version-v0.7.11-0070f3)
+![version](https://img.shields.io/badge/version-v0.8.0-0070f3)
 
 ## Features
 
 - Draggable, resizable window with minimize and viewport snapping
 - Sidebar tabs with optional icons and one- or two-column layouts
 - Toggles, sliders, dropdowns, keybinds, color pickers, text inputs, buttons, paragraphs
-- Toast notifications
+- Multi-select dropdowns, keybind modes (`Always` / `Toggle` / `Hold`), hover tooltips
+- Config system: flags, `GetConfig` / `SetConfig`, JSON save / load / delete / list with executor filesystem persistence
+- Toast notifications (including sticky ones via `Duration <= 0`)
 - Configurable theme
 - 120+ Lucide icons built in, preloaded on startup
 - Randomized instance names, hidden parenting (`gethui` / `protect_gui`), no console output
@@ -90,10 +92,16 @@ A full example is available at [`examples/basic.luau`](examples/basic.luau).
 | --- | --- |
 | `Window:Tab(name, icon?) -> Tab` | Adds a sidebar tab with an optional icon name (see Icons below). The first tab is active by default. |
 | `Window:Notify(config)` | Same as `Reborn:Notify`. |
-| `Window:Search(query)` | Filters rows by text. `""` clears the filter. |
+| `Window:Search(query)` | Filters rows by label and dropdown option text. `""` clears the filter. |
 | `Window:SetTitle(text)` | Updates the header title. |
 | `Window:Toggle()` / `Window:SetVisible(bool)` | Hides or reopens the window. |
 | `Window:Minimize()` | Collapses the window to its header bar. |
+| `Window:GetConfig() -> table` | Snapshots all flagged element values into a `{ flag = value }` table. |
+| `Window:SetConfig(table)` | Applies values by flag without firing callbacks. |
+| `Window:SaveConfig(name) -> bool` | Encodes the current config as JSON. Persists to `reborn/<title>/<name>.json` via the executor's `writefile` when available, otherwise keeps it in memory. |
+| `Window:LoadConfig(name) -> table?` | Reads and applies a saved config. Returns the applied table, or `nil` if not found. |
+| `Window:DeleteConfig(name) -> bool` | Removes a saved config from disk and memory. |
+| `Window:ListConfigs() -> {string}` | Lists known config names (filesystem entries when `listfiles` exists, plus in-memory ones). |
 | `Window:Destroy()` | Destroys the ScreenGui and disconnects input. |
 
 ### Tab
@@ -118,6 +126,8 @@ A selection of available names: `home`, `crosshair`, `eye`, `settings`, `swords`
 
 Every component takes a config table and returns an object with a `Set` method. `Set(value, fire)` re-fires the callback only when `fire` is `true`. All config fields are optional; omitted values fall back to defaults (e.g. sliders default to `0–100`, dropdowns select the first option).
 
+Every component also accepts `Tooltip` (hover hint), and every returned object exposes `SetVisible(bool)`, `SetTooltip(text)` and `Destroy()`. Dropdown options keep their original types — a numeric option comes back as a number.
+
 Each component also accepts a string with an optional callback:
 
 ```lua
@@ -128,14 +138,39 @@ Section:Paragraph("Some text.")
 
 | Component | Config | Object |
 | --- | --- | --- |
-| `Toggle` | `Text`, `Value` (bool), `Callback(value)` | `Set(value, fire?)` |
-| `Slider` | `Text`, `Min`, `Max`, `Value`, `Suffix`, `Callback(value)` | `Set(value, fire?)` |
-| `Dropdown` | `Text`, `Options` (list), `Value`, `Callback(selected)` | `Set(value, fire?)` |
-| `Keybind` | `Text`, `Value`, `Callback(name, input, gameProcessed)` | `Set(name)` |
-| `ColorPicker` | `Text`, `Value` (`"#RRGGBB"` or `Color3`), `Callback(hex, color3)` | `Set(hex, fire?)` |
-| `Input` | `Text`, `Value`, `Placeholder`, `Live` (bool), `Callback(text, enterPressed)` | `Set(text)` |
-| `Button` | `Text`, `Primary` (bool), `Callback()` | `Set(text)` |
+| `Toggle` | `Text`, `Value` (bool), `Flag`, `Tooltip`, `Callback(value)` | `Set(value, fire?)` |
+| `Slider` | `Text`, `Min`, `Max`, `Step`, `Value`, `Suffix`, `Flag`, `Tooltip`, `Callback(value)` | `Set(value, fire?)` |
+| `Dropdown` | `Text`, `Options` (list), `Value`, `Multi` (bool), `Flag`, `Tooltip`, `Callback(selected or list)` | `Set(value, fire?)` |
+| `Keybind` | `Text`, `Value`, `Mode` (`"Always" / "Toggle" / "Hold"`), `Flag`, `Tooltip`, `Callback(...)` | `Set(name)` |
+| `ColorPicker` | `Text`, `Value` (`"#RRGGBB"` or `Color3`), `Flag`, `Tooltip`, `Callback(hex, color3)` | `Set(hex, fire?)` |
+| `Input` | `Text`, `Value`, `Placeholder`, `Live` (bool), `Flag`, `Tooltip`, `Callback(text, enterPressed)` | `Set(text)` |
+| `Button` | `Text`, `Primary` (bool), `Tooltip`, `Callback()` | `Set(text)` |
 | `Paragraph` | `Text` | `Set(text)` |
+
+Keybind modes: `Always` fires `Callback(name, input, gameProcessed)` on every press. `Toggle` fires `Callback(active, name, ...)` — `true` on the first press, `false` on the next. `Hold` fires `Callback(true, ...)` on down and `Callback(false, ...)` on release. While listening, `Backspace` clears the bind and `Escape` cancels.
+
+With `Multi = true`, `Value` and the callback carry an array of the selected options in option order; clicking an option toggles it and keeps the popover open.
+
+```lua
+local dd = Section:Dropdown({
+    Text = "Target filters",
+    Multi = true,
+    Value = { "Players" },
+    Options = { "Players", "NPCs", "Team check" },
+    Callback = function(list) print(#list, "selected") end,
+})
+```
+
+Flags feed the config system:
+
+```lua
+Section:Toggle({ Text = "Aim assist", Value = true, Flag = "aim" })
+Section:Slider({ Text = "FOV", Min = 5, Max = 120, Value = 90, Flag = "fov" })
+
+Window:SaveConfig("main")      -- writes reborn/<title>/main.json
+Window:LoadConfig("main")      -- restores every flagged value
+for _, name in ipairs(Window:ListConfigs()) do print(name) end
+```
 
 ### Theme
 
