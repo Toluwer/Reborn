@@ -169,6 +169,7 @@ Interface:Keybind({
                 Window:Toggle()
         end,
 })
+Window.ToggleKey = "Right Shift"
 
 local Config = Settings:Section("Configuration")
 local nameInput = Config:Input({

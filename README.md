@@ -2,11 +2,11 @@
 
 A dark, minimalist UI library for Roblox, implemented in a single Luau module.
 
-![version](https://img.shields.io/badge/version-v0.8.0-0070f3)
+![version](https://img.shields.io/badge/version-v0.8.1-0070f3)
 
 ## Features
 
-- Draggable, resizable window with minimize and viewport snapping
+- Draggable, resizable window with a pill minimize and viewport snapping
 - Sidebar tabs with optional icons and one- or two-column layouts
 - Toggles, sliders, dropdowns, keybinds, color pickers, text inputs, buttons, paragraphs
 - Multi-select dropdowns, keybind modes (`Always` / `Toggle` / `Hold`), hover tooltips
@@ -94,8 +94,9 @@ A full example is available at [`examples/basic.luau`](examples/basic.luau).
 | `Window:Notify(config)` | Same as `Reborn:Notify`. |
 | `Window:Search(query)` | Filters rows by label and dropdown option text. `""` clears the filter. |
 | `Window:SetTitle(text)` | Updates the header title. |
-| `Window:Toggle()` / `Window:SetVisible(bool)` | Hides or reopens the window. |
-| `Window:Minimize()` | Collapses the window to its header bar. |
+| `Window:Toggle()` / `Window:SetVisible(bool)` | Hides or reopens the window. Restores from the minimized pill first. |
+| `Window:Minimize()` | Morphs the window into a compact pill docked at the top-center of the screen — no outline, no window buttons, fully rounded pill radius. Click the pill (or hover it) to expand back. |
+| `Window.ToggleKey = "Right Shift"` | Optional. Key name shown in the pill's hover hint (`"Click or Right Shift to open"`). Set it to your UI-toggle keybind. |
 | `Window:GetConfig() -> table` | Snapshots all flagged element values into a `{ flag = value }` table. |
 | `Window:SetConfig(table)` | Applies values by flag without firing callbacks. |
 | `Window:SaveConfig(name) -> bool` | Encodes the current config as JSON. Persists to `reborn/<title>/<name>.json` via the executor's `writefile` when available, otherwise keeps it in memory. |

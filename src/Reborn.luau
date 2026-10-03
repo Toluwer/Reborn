@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 
 local Reborn = {
-        Version = "0.8.0",
+        Version = "0.8.1",
         NotificationsEnabled = true,
         _windows = {},
         _configs = {},
@@ -78,6 +78,7 @@ local GEO = {
         FieldH       = 30,
         ToastW       = 294,
         Launcher     = 46,
+        PillH        = 34,
         GridGap      = 8,
 }
 
@@ -100,7 +101,7 @@ local function New(className, props)
 end
 
 local function corner(inst, r)
-        New("UICorner", { CornerRadius = UDim.new(0, r), Parent = inst })
+        return New("UICorner", { CornerRadius = UDim.new(0, r), Parent = inst })
 end
 
 local function stroke(inst, color, transparency, thickness)
@@ -679,8 +680,8 @@ function Reborn:CreateWindow(config)
                 BorderSizePixel = 0,
                 Parent = gui,
         })
-        corner(windowFrame, GEO.WindowRadius)
-        feather(windowFrame, GEO.WindowRadius, theme.LineStrong)
+        local winCorner = corner(windowFrame, GEO.WindowRadius)
+        local winRing = feather(windowFrame, GEO.WindowRadius, theme.LineStrong)
         local windowFace = New("Frame", {
                 Position = UDim2.new(0, 1, 0, 1),
                 Size = UDim2.new(1, -2, 1, -2),
@@ -689,10 +690,10 @@ function Reborn:CreateWindow(config)
                 ClipsDescendants = true,
                 Parent = windowFrame,
         })
-        corner(windowFace, GEO.WindowRadius - 1)
+        local faceCorner = corner(windowFace, GEO.WindowRadius - 1)
 
         local function recenter()
-                if state.dragged or state.closed then return end
+                if state.dragged or state.closed or state.min then return end
                 killTween(windowFrame, "Position")
                 local v = viewportSize()
                 windowFrame.Position = UDim2.new(0, rnd(v.X / 2 - W / 2), 0, rnd(v.Y / 2 - H / 2))
@@ -923,6 +924,88 @@ function Reborn:CreateWindow(config)
                 tween(launcherFace, 0.12, { BackgroundColor3 = theme.Overlay })
         end)
 
+        local pillTitleText = tostring(config.Title or "Reborn")
+        local pillTitleW = rnd(measureText(pillTitleText, 13, F.Semibold))
+        local pillRestW = 41 + pillTitleW
+        local pill = New("TextButton", {
+                AnchorPoint = Vector2.new(0.5, 0),
+                Position = UDim2.new(0.5, 0, 0, 14),
+                Size = UDim2.new(0, pillRestW, 0, GEO.PillH),
+                BackgroundColor3 = theme.Surface,
+                BorderSizePixel = 0,
+                Text = "",
+                AutoButtonColor = false,
+                ClipsDescendants = true,
+                Visible = false,
+                ZIndex = 40,
+                Parent = gui,
+        })
+        corner(pill, GEO.PillH / 2)
+        local pillContent = New("Frame", {
+                AnchorPoint = Vector2.new(0.5, 0),
+                Position = UDim2.new(0.5, 0, 0, 0),
+                Size = UDim2.new(0, pillRestW, 1, 0),
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0,
+                Parent = pill,
+        })
+        New("Frame", {
+                Position = UDim2.new(0, 12, 0, 12),
+                Size = UDim2.new(0, 9, 0, 9),
+                Rotation = 45,
+                BackgroundColor3 = theme.Accent,
+                BorderSizePixel = 0,
+                Parent = pillContent,
+        })
+        New("TextLabel", {
+                AnchorPoint = Vector2.new(0, 0.5),
+                Position = UDim2.new(0, 29, 0.5, 0),
+                Size = UDim2.new(0, pillTitleW, 0, 16),
+                BackgroundTransparency = 1,
+                Font = F.Semibold,
+                TextSize = 13,
+                TextColor3 = theme.Text,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Text = pillTitleText,
+                Parent = pillContent,
+        })
+        local pillHint = New("TextLabel", {
+                AnchorPoint = Vector2.new(0, 0.5),
+                Position = UDim2.new(0, 39 + pillTitleW, 0.5, 0),
+                Size = UDim2.new(0, 0, 0, 15),
+                AutomaticSize = Enum.AutomaticSize.X,
+                BackgroundTransparency = 1,
+                Font = F.Regular,
+                TextSize = 12,
+                TextColor3 = theme.TextMuted,
+                TextTransparency = 1,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Text = "Click to open",
+                Parent = pillContent,
+        })
+        local function snapPillRest()
+                pill.Size = UDim2.new(0, pillRestW, 0, GEO.PillH)
+                pillContent.Size = UDim2.new(0, pillRestW, 1, 0)
+                pillHint.TextTransparency = 1
+                pill.BackgroundColor3 = theme.Surface
+        end
+        pill.MouseEnter:Connect(function()
+                local key = Window and Window.ToggleKey or config.ToggleKey
+                local hint = key and ("Click or " .. tostring(key) .. " to open") or "Click to open"
+                pillHint.Text = hint
+                local w = 39 + pillTitleW + rnd(measureText(hint, 12, F.Regular)) + 12
+                tween(pill, 0.2, { Size = UDim2.new(0, w, 0, GEO.PillH) }, Enum.EasingStyle.Quint)
+                tween(pillContent, 0.2, { Size = UDim2.new(0, w, 1, 0) }, Enum.EasingStyle.Quint)
+                tween(pillHint, 0.2, { TextTransparency = 0 })
+                tween(pill, 0.2, { BackgroundColor3 = theme.Overlay })
+        end)
+        pill.MouseLeave:Connect(function()
+                tween(pill, 0.2, { Size = UDim2.new(0, pillRestW, 0, GEO.PillH) }, Enum.EasingStyle.Quint)
+                tween(pillContent, 0.2, { Size = UDim2.new(0, pillRestW, 1, 0) }, Enum.EasingStyle.Quint)
+                tween(pillHint, 0.2, { TextTransparency = 1 })
+                tween(pill, 0.2, { BackgroundColor3 = theme.Surface })
+        end)
+
         local toastLayer = buildToastLayer(gui, theme)
 
         local dragState = nil
@@ -949,7 +1032,7 @@ function Reborn:CreateWindow(config)
                 end
         end)
 
-        local closeAllPops
+        local closeAllPops, closeSearch
 
         local grip = New("TextButton", {
                 AnchorPoint = Vector2.new(1, 1),
@@ -998,14 +1081,58 @@ function Reborn:CreateWindow(config)
         local function setMinimized(m)
                 if state.min == m then return end
                 state.min = m
-                grip.Visible = not m
-                if m then closeAllPops() end
-                minIcon.Visible = not m
-                plusIcon.Visible = m
                 if m then
-                        tween(windowFrame, 0.26, { Size = UDim2.new(0, W, 0, GEO.Header) }, Enum.EasingStyle.Quint)
+                        closeAllPops()
+                        if searchWrap.Size.X.Offset > 0 then closeSearch() end
+                        grip.Visible = false
+                        minIcon.Visible = false
+                        plusIcon.Visible = true
+                        state.minPos = { x = windowFrame.Position.X.Offset, y = windowFrame.Position.Y.Offset }
+                        killTween(windowFrame, "Position")
+                        killTween(windowFrame, "Size")
+                        local v = viewportSize()
+                        local tw = pillRestW + 2
+                        tween(windowFrame, 0.36, {
+                                Size = UDim2.new(0, tw, 0, GEO.PillH + 2),
+                                Position = UDim2.new(0, rnd(v.X / 2 - tw / 2), 0, 13),
+                        }, Enum.EasingStyle.Quint)
+                        tween(winCorner, 0.36, { CornerRadius = UDim.new(0, GEO.PillH / 2 + 1) }, Enum.EasingStyle.Quint)
+                        tween(faceCorner, 0.36, { CornerRadius = UDim.new(0, GEO.PillH / 2) }, Enum.EasingStyle.Quint)
+                        tween(winRing, 0.24, { BackgroundTransparency = 1 })
+                        tween(windowFrame, 0.24, { BackgroundColor3 = theme.Surface })
+                        task.delay(0.38, function()
+                                if state.min then
+                                        windowFrame.Visible = false
+                                        snapPillRest()
+                                        pill.Visible = true
+                                end
+                        end)
                 else
-                        tween(windowFrame, 0.26, { Size = UDim2.new(0, W, 0, H) }, Enum.EasingStyle.Quint)
+                        grip.Visible = true
+                        minIcon.Visible = true
+                        plusIcon.Visible = false
+                        killTween(windowFrame, "Position")
+                        killTween(windowFrame, "Size")
+                        local v = viewportSize()
+                        if not windowFrame.Visible then
+                                local tw = pillRestW + 2
+                                windowFrame.Position = UDim2.new(0, rnd(v.X / 2 - tw / 2), 0, 13)
+                                windowFrame.Size = UDim2.new(0, tw, 0, GEO.PillH + 2)
+                                windowFrame.Visible = true
+                        end
+                        pill.Visible = false
+                        snapPillRest()
+                        local tx, ty
+                        if state.minPos then
+                                tx, ty = state.minPos.x, state.minPos.y
+                        else
+                                tx, ty = rnd(v.X / 2 - W / 2), rnd(v.Y / 2 - H / 2)
+                        end
+                        tween(windowFrame, 0.34, { Size = UDim2.new(0, W, 0, H), Position = UDim2.new(0, tx, 0, ty) }, Enum.EasingStyle.Quint)
+                        tween(winCorner, 0.34, { CornerRadius = UDim.new(0, GEO.WindowRadius) }, Enum.EasingStyle.Quint)
+                        tween(faceCorner, 0.34, { CornerRadius = UDim.new(0, GEO.WindowRadius - 1) }, Enum.EasingStyle.Quint)
+                        tween(winRing, 0.3, { BackgroundTransparency = 0.5 })
+                        tween(windowFrame, 0.3, { BackgroundColor3 = theme.LineStrong })
                 end
         end
 
@@ -1013,6 +1140,27 @@ function Reborn:CreateWindow(config)
                 if state.closed then return end
                 state.closed = true
                 closeAllPops()
+                if state.min then
+                        state.min = false
+                        pill.Visible = false
+                        grip.Visible = true
+                        minIcon.Visible = true
+                        plusIcon.Visible = false
+                        killTween(windowFrame, "Position")
+                        killTween(windowFrame, "Size")
+                        killTween(windowFrame, "BackgroundColor3")
+                        killTween(winCorner, "CornerRadius")
+                        killTween(faceCorner, "CornerRadius")
+                        killTween(winRing, "BackgroundTransparency")
+                        windowFrame.Size = UDim2.new(0, W, 0, H)
+                        winCorner.CornerRadius = UDim.new(0, GEO.WindowRadius)
+                        faceCorner.CornerRadius = UDim.new(0, GEO.WindowRadius - 1)
+                        winRing.BackgroundTransparency = 0.5
+                        windowFrame.BackgroundColor3 = theme.LineStrong
+                        if state.minPos then
+                                windowFrame.Position = UDim2.new(0, state.minPos.x, 0, state.minPos.y)
+                        end
+                end
                 local px, py = windowFrame.Position.X.Offset, windowFrame.Position.Y.Offset
                 tween(windowFrame, 0.18, { Position = UDim2.new(0, px, 0, py + 14) })
                 task.delay(0.2, function()
@@ -1027,9 +1175,14 @@ function Reborn:CreateWindow(config)
                 setMinimized(not state.min)
         end)
 
+        pill.Activated:Connect(function()
+                setMinimized(false)
+        end)
+
         local function reopen()
                 if not state.closed then return end
                 state.closed = false
+                if state.min then setMinimized(false) end
                 closeAllPops()
                 recenter()
                 windowFrame.Visible = true
@@ -1077,7 +1230,7 @@ function Reborn:CreateWindow(config)
                 searchBox:CaptureFocus()
         end
 
-        local function closeSearch()
+        closeSearch = function()
                 searchOpen = false
                 searchBox.Text = ""
                 applyFilter("")
@@ -3038,14 +3191,16 @@ function Reborn:CreateWindow(config)
 
         function Window:SetVisible(v)
                 if v then
-                        reopen()
+                        if state.min then setMinimized(false) else reopen() end
                 else
                         closeWindow()
                 end
         end
 
         function Window:Toggle()
-                if state.closed then
+                if state.min then
+                        setMinimized(false)
+                elseif state.closed then
                         reopen()
                 else
                         closeWindow()
