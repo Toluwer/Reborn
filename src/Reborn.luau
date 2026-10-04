@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 
 local Reborn = {
-        Version = "0.8.2",
+        Version = "0.8.3",
         NotificationsEnabled = true,
         _windows = {},
         _configs = {},
@@ -890,7 +890,7 @@ function Reborn:CreateWindow(config)
 
         local pillTitleText = tostring(config.Title or "Reborn")
         local pillTitleW = rnd(measureText(pillTitleText, 13, F.Semibold))
-        local pillRestW = 41 + pillTitleW
+        local pillRestW = 24 + pillTitleW
         local pill = New("TextButton", {
                 AnchorPoint = Vector2.new(0.5, 0),
                 Position = UDim2.new(0.5, 0, 0, 14),
@@ -913,17 +913,9 @@ function Reborn:CreateWindow(config)
                 BorderSizePixel = 0,
                 Parent = pill,
         })
-        local pillDiamond = New("Frame", {
-                Position = UDim2.new(0, 12, 0, 12),
-                Size = UDim2.new(0, 9, 0, 9),
-                Rotation = 45,
-                BackgroundColor3 = theme.Accent,
-                BorderSizePixel = 0,
-                Parent = pillContent,
-        })
         local pillTitle = New("TextLabel", {
                 AnchorPoint = Vector2.new(0, 0.5),
-                Position = UDim2.new(0, 29, 0.5, 0),
+                Position = UDim2.new(0, 12, 0.5, 0),
                 Size = UDim2.new(0, pillTitleW, 0, 16),
                 BackgroundTransparency = 1,
                 Font = F.Semibold,
@@ -935,7 +927,7 @@ function Reborn:CreateWindow(config)
         })
         local pillHint = New("TextLabel", {
                 AnchorPoint = Vector2.new(0, 0.5),
-                Position = UDim2.new(0, 39 + pillTitleW, 0.5, 0),
+                Position = UDim2.new(0, 22 + pillTitleW, 0.5, 0),
                 Size = UDim2.new(0, 0, 0, 15),
                 AutomaticSize = Enum.AutomaticSize.X,
                 BackgroundTransparency = 1,
@@ -958,7 +950,7 @@ function Reborn:CreateWindow(config)
                 local key = Window and Window.ToggleKey or config.ToggleKey
                 local hint = key and ("Click or " .. tostring(key) .. " to open") or "Click to open"
                 pillHint.Text = hint
-                local w = 39 + pillTitleW + rnd(measureText(hint, 12, F.Regular)) + 12
+                local w = 22 + pillTitleW + rnd(measureText(hint, 12, F.Regular)) + 12
                 tween(pill, 0.2, { Size = UDim2.new(0, w, 0, GEO.PillH) }, Enum.EasingStyle.Quint)
                 tween(pillContent, 0.2, { Size = UDim2.new(0, w, 1, 0) }, Enum.EasingStyle.Quint)
                 tween(pillHint, 0.2, { TextTransparency = pillClear and 0.55 or 0 })
@@ -1158,7 +1150,6 @@ function Reborn:CreateWindow(config)
                                 local bg = pillClear and 0.45 or 0
                                 local tx = pillClear and 0.4 or 0
                                 tween(pill, 0.5, { BackgroundTransparency = bg }, Enum.EasingStyle.Quint)
-                                tween(pillDiamond, 0.5, { BackgroundTransparency = bg }, Enum.EasingStyle.Quint)
                                 tween(pillTitle, 0.5, { TextTransparency = tx }, Enum.EasingStyle.Quint)
                                 if pillHint.TextTransparency < 1 then
                                         tween(pillHint, 0.5, { TextTransparency = pillClear and 0.55 or 0 }, Enum.EasingStyle.Quint)
