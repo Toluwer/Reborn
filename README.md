@@ -125,7 +125,7 @@ A selection of available names: `home`, `crosshair`, `eye`, `settings`, `swords`
 
 ### Section
 
-Every component takes a config table and returns an object with a `Set` method. `Set(value, fire)` re-fires the callback only when `fire` is `true`. All config fields are optional; omitted values fall back to defaults (e.g. sliders default to `0–100`, dropdowns select the first option).
+Every component takes a config table and returns an object with a `Set` method (`Image` returns `SetImage`, and also answers to `Set` for the config system). `Set(value, fire)` re-fires the callback only when `fire` is `true`. All config fields are optional; omitted values fall back to defaults (e.g. sliders default to `0–100`, dropdowns select the first option).
 
 Every component also accepts `Tooltip` (hover hint), and every returned object exposes `SetVisible(bool)`, `SetTooltip(text)` and `Destroy()`. Dropdown options keep their original types — a numeric option comes back as a number.
 
@@ -135,6 +135,7 @@ Each component also accepts a string with an optional callback:
 Section:Toggle("Enable ESP", function(value) end)
 Section:Button("Rejoin", function() end)
 Section:Paragraph("Some text.")
+Section:Image("rbxassetid://12345678")
 ```
 
 | Component | Config | Object |
@@ -147,6 +148,9 @@ Section:Paragraph("Some text.")
 | `Input` | `Text`, `Value`, `Placeholder`, `Live` (bool), `Flag`, `Tooltip`, `Callback(text, enterPressed)` | `Set(text)` |
 | `Button` | `Text`, `Primary` (bool), `Tooltip`, `Callback()` | `Set(text)` |
 | `Paragraph` | `Text` | `Set(text)` |
+| `Image` | `Image` (asset id number, id string, or URL), `Height`, `ScaleType`, `CornerRadius`, `Tooltip`, `Callback()` | `SetImage(source)` |
+
+Images render as full-width plates that follow the window through resize and drag. `Image` accepts a plain asset id number (`12345678`), a bare digit string, or any URL — `rbxassetid://`, `rbxthumb://`, `rbxasset://` and `https://` pass through untouched, while numbers and digit strings are normalized to `rbxassetid://`. `ScaleType` defaults to `Crop` (fills the plate with rounded corners), `Fit` letterboxes inside the plate, `Stretch` distorts to fill. While the asset loads, the plate reads as the standard surface placeholder. A `Callback` turns the plate into a clickable image button with a subtle transparency lift on hover. Flagged images join the config system — `GetConfig` snapshots the applied source string and `SetConfig` restores it.
 
 Keybind modes: `Always` fires `Callback(name, input, gameProcessed)` on every press. `Toggle` fires `Callback(active, name, ...)` — `true` on the first press, `false` on the next. `Hold` fires `Callback(true, ...)` on down and `Callback(false, ...)` on release. While listening, `Backspace` clears the bind and `Escape` cancels.
 

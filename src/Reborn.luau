@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 
 local Reborn = {
-        Version = "0.8.3",
+        Version = "0.8.4",
         NotificationsEnabled = true,
         _windows = {},
         _configs = {},
@@ -79,6 +79,9 @@ local GEO = {
         ToastW       = 294,
         PillH        = 34,
         GridGap      = 8,
+        ImageH       = 96,
+        ImageMinH    = 24,
+        ImageMaxH    = 400,
 }
 
 local function rnd(x) return math.floor(x + 0.5) end
@@ -2723,6 +2726,65 @@ function Reborn:CreateWindow(config)
                 return finishElement("Paragraph", p, cfg, lbl, { lbl })
         end
 
+        local function toAsset(v)
+                local t = type(v)
+                if t == "number" then return "rbxassetid://" .. string.format("%.0f", v) end
+                if t == "string" then
+                        local s = string.match(v, "^%s*(.-)%s*$")
+                        if s == "" then return nil end
+                        if string.find(s, "://", 1, true) then return s end
+                        if string.match(s, "^%d+$") then return "rbxassetid://" .. s end
+                        return s
+                end
+                return nil
+        end
+
+        local function toScaleType(v)
+                local s = string.lower(tostring(v or ""))
+                if string.find(s, "fit", 1, true) then return Enum.ScaleType.Fit end
+                if string.find(s, "stretch", 1, true) then return Enum.ScaleType.Stretch end
+                return Enum.ScaleType.Crop
+        end
+
+        local function addImage(section, cfg)
+                cfg = cfg or {}
+                local raw = cfg.Image ~= nil and cfg.Image or cfg.Text
+                local src = toAsset(raw)
+                local h = clamp(rnd(tonumber(cfg.Height) or GEO.ImageH), GEO.ImageMinH, GEO.ImageMaxH)
+                local st = toScaleType(cfg.ScaleType)
+                local r = clamp(rnd(tonumber(cfg.CornerRadius) or 7), 0, 8)
+                local row, face = makeRow(section, h)
+                local img = New("ImageLabel", {
+                        Size = UDim2.new(1, 0, 1, 0),
+                        BackgroundTransparency = 1,
+                        Image = src or "",
+                        ScaleType = st,
+                        BorderSizePixel = 0,
+                        Parent = face,
+                })
+                corner(img, r)
+                local ov = nil
+                if cfg.Callback then
+                        ov = overlayBtn(row)
+                        ov.Activated:Connect(function()
+                                if cfg.Callback then cfg.Callback() end
+                        end)
+                        ov.MouseEnter:Connect(function()
+                                tween(img, 0.13, { ImageTransparency = 0.1 })
+                        end)
+                        ov.MouseLeave:Connect(function()
+                                tween(img, 0.13, { ImageTransparency = 0 })
+                        end)
+                end
+                registerSearch(row, raw, section)
+                local o = { Image = img }
+                function o:SetImage(v)
+                        img.Image = toAsset(v) or ""
+                end
+                o.Set = o.SetImage
+                return finishElement("Image", o, cfg, row, ov and { ov } or { img })
+        end
+
         local function newSection(tab, name, badge)
                 local parent = tab.Page
                 if tab.Columns then
@@ -2809,6 +2871,7 @@ function Reborn:CreateWindow(config)
                 function section:Input(a, b) return addInput(section, normCfg(a, b)) end
                 function section:Button(a, b) return addButton(section, normCfg(a, b)) end
                 function section:Paragraph(a, b) return addParagraph(section, normCfg(a, b)) end
+                function section:Image(a, b) return addImage(section, normCfg(a, b)) end
                 return section
         end
 
@@ -3076,6 +3139,8 @@ function Reborn:CreateWindow(config)
                                         out[flag] = el.Hex
                                 elseif k == "Input" then
                                         out[flag] = el.Text
+                                elseif k == "Image" then
+                                        out[flag] = el.Image.Image
                                 end
                         end
                 end

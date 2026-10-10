@@ -48,6 +48,24 @@ Core:Slider({
 
 local Combat = Window:Tab("Combat", "crosshair")
 
+local Media = Main:Section("Media")
+Media:Image({
+        Image = "rbxthumb://type/GameIcon/id/" .. game.PlaceId .. "/w/150/h/150",
+        Height = 120,
+        CornerRadius = 8,
+        Tooltip = "rbxthumb resolves for any place id — this is the current game's icon.",
+        Callback = function()
+                Reborn:Notify({
+                        Title = "Image clicked",
+                        Description = "An Image with a Callback acts as an image button.",
+                        Type = "info",
+                })
+        end,
+})
+Media:Image("rbxthumb://type/AvatarHeadShot/id/" .. game.Players.LocalPlayer.UserId .. "/w/150/h/150", function()
+        print("[Reborn] avatar image clicked")
+end)
+
 local Aim = Combat:Section("Aim assist")
 Aim:Toggle({
         Text = "Enabled",
