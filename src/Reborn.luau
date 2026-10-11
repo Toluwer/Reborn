@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 
 local Reborn = {
-        Version = "0.9.0",
+        Version = "0.9.1",
         NotificationsEnabled = true,
         _windows = {},
         _configs = {},
@@ -3141,7 +3141,8 @@ function Reborn:CreateWindow(config)
                         nextOrder = nextOrder + 1
                         corner(ob, 6)
                         local bar = New("Frame", {
-                                Position = UDim2.new(0, 4, 0.5, 0),
+                                AnchorPoint = Vector2.new(0, 0.5),
+                                Position = UDim2.new(0, 5, 0.5, 0),
                                 Size = UDim2.new(0, 3, 0, ih - 12),
                                 BackgroundColor3 = theme.Accent,
                                 BorderSizePixel = 0,
