@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 
 local Reborn = {
-        Version = "0.8.4",
+        Version = "0.9.0",
         NotificationsEnabled = true,
         _windows = {},
         _configs = {},
@@ -82,12 +82,23 @@ local GEO = {
         ImageH       = 96,
         ImageMinH    = 24,
         ImageMaxH    = 400,
+        ListH        = 120,
+        ListMaxH     = 260,
+        ListMinH     = 46,
 }
 
 local function rnd(x) return math.floor(x + 0.5) end
 local function clamp(v, a, b)
         if v < a then return a elseif v > b then return b end
         return v
+end
+
+local function toWidth(w, def)
+        if type(w) == "number" then
+                if w > 0 and w < 1 then return UDim.new(w, 0) end
+                if w >= 1 then return UDim.new(0, rnd(w)) end
+        end
+        return def
 end
 
 local function New(className, props)
@@ -1243,9 +1254,22 @@ function Reborn:CreateWindow(config)
                 closeSearch()
         end)
 
-        local function makeRow(section, h)
+        local disabledRows = setmetatable({}, { __mode = "k" })
+
+        local function setRowDim(row, face, rh, d)
+                disabledRows[row] = d or nil
+                killTween(face, "BackgroundColor3")
+                killTween(row, "BackgroundColor3")
+                killTween(rh, "BackgroundColor3")
+                face.BackgroundColor3 = theme.Surface
+                row.BackgroundColor3 = theme.Line
+                rh.BackgroundColor3 = theme.Line
+                face.BackgroundTransparency = d and 0.3 or 0
+        end
+
+        local function makeRow(section, h, w)
                 local row = New("Frame", {
-                        Size = UDim2.new(1, 0, 0, h),
+                        Size = w and UDim2.new(w.Scale, w.Offset, 0, h) or UDim2.new(1, 0, 0, h),
                         BackgroundColor3 = theme.Line,
                         BorderSizePixel = 0,
                         ZIndex = 1,
@@ -1262,6 +1286,7 @@ function Reborn:CreateWindow(config)
                 })
                 corner(face, 7)
                 row.MouseEnter:Connect(function()
+                        if disabledRows[row] then return end
                         tween(face, 0.12, { BackgroundColor3 = theme.RowHover })
                         tween(row, 0.12, { BackgroundColor3 = theme.LineStrong })
                         tween(rh, 0.12, { BackgroundColor3 = theme.LineStrong })
@@ -1271,7 +1296,7 @@ function Reborn:CreateWindow(config)
                         tween(row, 0.12, { BackgroundColor3 = theme.Line })
                         tween(rh, 0.12, { BackgroundColor3 = theme.Line })
                 end)
-                return row, face
+                return row, face, rh
         end
 
         local function rowLabel(row, text, clear)
@@ -1304,6 +1329,17 @@ function Reborn:CreateWindow(config)
         end
 
         local function registerSearch(frame, text, section)
+                if section and section._isRow then
+                        local e = section._search
+                        if e == nil then
+                                e = { frame = section.Frame, text = "", section = section._parent }
+                                section._search = e
+                                table.insert(state.searchRows, e)
+                        end
+                        local add = tostring(text or "")
+                        e.text = e.text == "" and add or (e.text .. " " .. add)
+                        return
+                end
                 table.insert(state.searchRows, { frame = frame, text = text and tostring(text) or "", section = section })
         end
 
@@ -1437,10 +1473,24 @@ function Reborn:CreateWindow(config)
                 if entry.pop then pcall(function() entry.pop:Destroy() end) end
         end
 
-        local function finishElement(kind, el, cfg, row, hosts, pop)
+        local function finishElement(kind, el, cfg, row, hosts, pop, setEnabled)
                 el._kind = kind
                 el.Flag = cfg.Flag
-                local entry = { kind = kind, el = el, cfg = cfg, row = row, pop = pop }
+                el._row = row
+                local userCb = cfg.Callback
+                local entry = { kind = kind, el = el, cfg = cfg, row = row, pop = pop, disabled = false, setEnabled = setEnabled }
+                if userCb then
+                        cfg.Callback = function(...)
+                                if entry.disabled then return end
+                                return userCb(...)
+                        end
+                end
+                function el:SetEnabled(v)
+                        local d = not (v and true or false)
+                        if entry.disabled == d then return end
+                        entry.disabled = d
+                        if setEnabled then setEnabled(not d) end
+                end
                 function el:SetVisible(v)
                         v = v and true or false
                         if row then row.Visible = v end
@@ -1675,8 +1725,8 @@ function Reborn:CreateWindow(config)
 
         local function addToggle(section, cfg)
                 cfg = cfg or {}
-                local row = makeRow(section, GEO.RowH)
-                rowLabel(row, cfg.Text, 66)
+                local row, face, rh = makeRow(section, GEO.RowH, toWidth(cfg.Width, nil))
+                local lbl = rowLabel(row, cfg.Text, 66)
                 local btn = overlayBtn(row)
 
                 local track = New("Frame", {
@@ -1730,7 +1780,9 @@ function Reborn:CreateWindow(config)
                         tog.Value = value
                         if fire and cfg.Callback then cfg.Callback(value) end
                 end
+                local disabled = false
                 btn.Activated:Connect(function()
+                        if disabled then return end
                         value = not value
                         render(true)
                 end)
@@ -1741,12 +1793,29 @@ function Reborn:CreateWindow(config)
                         value = v and true or false
                         render(fire and true or false)
                 end
-                return finishElement("Toggle", tog, cfg, row, { btn })
+                local function setEnabled(v)
+                        disabled = not v
+                        setRowDim(row, face, rh, disabled)
+                        lbl.TextTransparency = disabled and 0.5 or 0
+                        if disabled then
+                                knob.BackgroundTransparency = 0.45
+                                trackFace.BackgroundTransparency = 0.45
+                                track.BackgroundTransparency = 0.45
+                                th.BackgroundTransparency = 0.85
+                        else
+                                knob.BackgroundTransparency = 0
+                                trackFace.BackgroundTransparency = 0
+                                track.BackgroundTransparency = 0
+                                th.BackgroundTransparency = 0.5
+                                render(false, true)
+                        end
+                end
+                return finishElement("Toggle", tog, cfg, row, { btn }, nil, setEnabled)
         end
 
         local function addSlider(section, cfg)
                 cfg = cfg or {}
-                local row = makeRow(section, GEO.SliderH)
+                local row, face, rh = makeRow(section, GEO.SliderH, toWidth(cfg.Width, nil))
 
                 local top = New("Frame", {
                         Position = UDim2.new(0, GEO.RowPad, 0, 10),
@@ -1754,7 +1823,7 @@ function Reborn:CreateWindow(config)
                         BackgroundTransparency = 1,
                         Parent = row,
                 })
-                New("TextLabel", {
+                local lblTop = New("TextLabel", {
                         Size = UDim2.new(1, -80, 1, 0),
                         BackgroundTransparency = 1,
                         Font = F.Medium,
@@ -1812,7 +1881,7 @@ function Reborn:CreateWindow(config)
                         Parent = track,
                 })
                 corner(handle, GEO.HandleD / 2)
-                feather(handle, GEO.HandleD / 2, theme.Handle)
+                local hh = feather(handle, GEO.HandleD / 2, theme.Handle)
 
                 local min = cfg.Min or 0
                 local max = cfg.Max or 100
@@ -1841,13 +1910,18 @@ function Reborn:CreateWindow(config)
                         local px = rnd(p * tw)
                         fill.Size = UDim2.new(0, px, 0, GEO.RailH)
                         handle.Position = UDim2.new(0, clamp(px - GEO.HandleD / 2, 0, tw - GEO.HandleD), 0, (GEO.SliderTrackH - GEO.HandleD) / 2)
-                        val.Text = fmtNum(value) .. suffix
+                        if type(cfg.Format) == "function" then
+                                val.Text = tostring(cfg.Format(value))
+                        else
+                                val.Text = fmtNum(value) .. suffix
+                        end
                         sld.Value = value
                 end
                 track:GetPropertyChangedSignal("AbsoluteSize"):Connect(render)
                 task.defer(render)
 
                 local dragging = false
+                local disabled = false
                 local function fromX(x)
                         local tw = track.AbsoluteSize.X
                         if tw < 1 then return end
@@ -1857,6 +1931,7 @@ function Reborn:CreateWindow(config)
                         if cfg.Callback then cfg.Callback(value) end
                 end
                 track.InputBegan:Connect(function(input)
+                        if disabled then return end
                         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                                 dragging = true
                                 fromX(input.Position.X)
@@ -1880,12 +1955,33 @@ function Reborn:CreateWindow(config)
                         render()
                         if fire and cfg.Callback then cfg.Callback(value) end
                 end
-                return finishElement("Slider", sld, cfg, row, { track })
+                function sld:SetRange(mn, mx)
+                        mn = tonumber(mn)
+                        mx = tonumber(mx)
+                        if mn == nil or mx == nil or mx <= mn then return false end
+                        min = mn
+                        max = mx
+                        value = snap(clamp(value, min, max))
+                        sld.Value = value
+                        render()
+                        return true
+                end
+                local function setEnabled(v)
+                        disabled = not v
+                        setRowDim(row, face, rh, disabled)
+                        lblTop.TextTransparency = disabled and 0.5 or 0
+                        val.TextTransparency = disabled and 0.5 or 0
+                        rail.BackgroundTransparency = disabled and 0.6 or 0
+                        fill.BackgroundTransparency = disabled and 0.6 or 0
+                        handle.BackgroundTransparency = disabled and 0.55 or 0
+                        hh.BackgroundTransparency = disabled and 0.85 or 0.5
+                end
+                return finishElement("Slider", sld, cfg, row, { track }, nil, setEnabled)
         end
 
         local function addDropdown(section, cfg)
                 cfg = cfg or {}
-                local row = makeRow(section, GEO.RowH)
+                local row, face, rh = makeRow(section, GEO.RowH, toWidth(cfg.Width, nil))
                 local lbl = rowLabel(row, cfg.Text, 118)
 
                 local chev = icon(row, "chevron-down", 18, theme.TextFaint)
@@ -1957,19 +2053,18 @@ function Reborn:CreateWindow(config)
                         Parent = popFace,
                 })
                 list(listScroll, 0)
-                if #options == 0 then
-                        New("TextLabel", {
-                                Position = UDim2.new(0, 10, 0, 0),
-                                Size = UDim2.new(1, -16, 0, GEO.OptH),
-                                BackgroundTransparency = 1,
-                                Font = F.Medium,
-                                TextSize = 13,
-                                TextColor3 = theme.TextFaint,
-                                TextXAlignment = Enum.TextXAlignment.Left,
-                                Text = "No options",
-                                Parent = listScroll,
-                        })
-                end
+                local emptyLbl = New("TextLabel", {
+                        Position = UDim2.new(0, 10, 0, 0),
+                        Size = UDim2.new(1, -16, 0, GEO.OptH),
+                        BackgroundTransparency = 1,
+                        Font = F.Medium,
+                        TextSize = 13,
+                        TextColor3 = theme.TextFaint,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        Text = "No options",
+                        Visible = #options == 0,
+                        Parent = listScroll,
+                })
                 local optBtns = {}
                 local function syncValue()
                         local vals = {}
@@ -2023,7 +2118,7 @@ function Reborn:CreateWindow(config)
                         end
                 end
 
-                for i, opt in ipairs(options) do
+                local function buildOption(i, opt)
                         local otext = tostring(opt)
                         local ob = New("TextButton", {
                                 Size = UDim2.new(1, -6, 0, GEO.OptH),
@@ -2084,17 +2179,22 @@ function Reborn:CreateWindow(config)
                                 end
                         end)
                         table.insert(optBtns, { _btn = ob, _txt = ot, _chk = chk, _text = otext })
-                        if (multi and sel[otext]) or (not multi and otext == tostring(dd.Value)) then
-                                if not multi then val.Text = otext end
-                                ot.TextColor3 = theme.Text
-                                chk.Visible = true
-                        end
                 end
-                if multi then syncValue() end
-                fit()
+                local function syncAll()
+                        if multi then syncValue() end
+                        refreshChecks()
+                        val.Text = displayText()
+                        fit()
+                end
+                for i, opt in ipairs(options) do
+                        buildOption(i, opt)
+                end
+                syncAll()
 
+                local disabled = false
                 local btn = overlayBtn(row)
                 btn.Activated:Connect(function()
+                        if disabled then return end
                         setOpen(not dd._open)
                 end)
                 local searchText = tostring(cfg.Text or "")
@@ -2123,7 +2223,59 @@ function Reborn:CreateWindow(config)
                                 end
                         end
                 end
-                return finishElement("Dropdown", dd, cfg, row, { btn }, pop)
+                function dd:SetOptions(opts)
+                        if type(opts) ~= "table" then return end
+                        setOpen(false)
+                        options = {}
+                        origOf, optTexts = {}, {}
+                        for i, opt in ipairs(opts) do
+                                options[i] = opt
+                                local t = tostring(opt)
+                                optTexts[i] = t
+                                if origOf[t] == nil then origOf[t] = opt end
+                        end
+                        if multi then
+                                local keep = {}
+                                for _, t in ipairs(optTexts) do
+                                        if sel[t] then keep[t] = true end
+                                end
+                                sel = keep
+                        else
+                                local cur = tostring(dd.Value)
+                                local found = false
+                                for _, t in ipairs(optTexts) do
+                                        if t == cur then found = true break end
+                                end
+                                if not found then dd.Value = options[1] ~= nil and options[1] or "" end
+                        end
+                        for _, b in ipairs(optBtns) do
+                                b._btn:Destroy()
+                        end
+                        optBtns = {}
+                        for i, opt in ipairs(options) do
+                                buildOption(i, opt)
+                        end
+                        popH = 10 + math.max(#options, 1) * GEO.OptH
+                        pop.Size = UDim2.new(1, 0, 0, popH)
+                        emptyLbl.Visible = #options == 0
+                        syncAll()
+                        for _, e in ipairs(state.searchRows) do
+                                if e.frame == row then
+                                        local st = tostring(cfg.Text or "")
+                                        if #optTexts > 0 then st = st .. " " .. table.concat(optTexts, " ") end
+                                        e.text = st
+                                end
+                        end
+                end
+                local function setEnabled(v)
+                        disabled = not v
+                        setRowDim(row, face, rh, disabled)
+                        if disabled and dd._open then setOpen(false) end
+                        lbl.TextTransparency = disabled and 0.5 or 0
+                        val.TextTransparency = disabled and 0.5 or 0
+                        chev.ImageTransparency = disabled and 0.5 or 0
+                end
+                return finishElement("Dropdown", dd, cfg, row, { btn }, pop, setEnabled)
         end
 
         local function bindFromString(s)
@@ -2141,7 +2293,7 @@ function Reborn:CreateWindow(config)
 
         local function addKeybind(section, cfg)
                 cfg = cfg or {}
-                local row = makeRow(section, GEO.RowH)
+                local row, face, rh = makeRow(section, GEO.RowH, toWidth(cfg.Width, nil))
                 local lbl = rowLabel(row, cfg.Text, GEO.ChipMinW + 22)
 
                 local chip = New("TextButton", {
@@ -2249,7 +2401,9 @@ function Reborn:CreateWindow(config)
                         pulseTween:Play()
                 end
 
+                local disabled = false
                 chip.InputBegan:Connect(function(input)
+                        if disabled then return end
                         local it = input.UserInputType
                         if it == Enum.UserInputType.MouseButton1 or it == Enum.UserInputType.MouseButton2 or it == Enum.UserInputType.MouseButton3 then
                                 if state.listening == kb then
@@ -2272,14 +2426,33 @@ function Reborn:CreateWindow(config)
                         kb.Active = false
                         txt.Text = tostring(name)
                 end
-                return finishElement("Keybind", kb, cfg, row, { chip })
+                local function setEnabled(v)
+                        disabled = not v
+                        setRowDim(row, face, rh, disabled)
+                        if disabled then
+                                if state.listening == kb then cancelListen() end
+                                kb.Callback = nil
+                                kb.Active = false
+                                chip.BackgroundTransparency = 0.45
+                                chipFace.BackgroundTransparency = 0.45
+                                ch.BackgroundTransparency = 0.85
+                        else
+                                kb.Callback = cfg.Callback
+                                chip.BackgroundTransparency = 0
+                                chipFace.BackgroundTransparency = 0
+                                ch.BackgroundTransparency = 0.5
+                        end
+                        lbl.TextTransparency = disabled and 0.5 or 0
+                        txt.TextTransparency = disabled and 0.5 or 0
+                end
+                return finishElement("Keybind", kb, cfg, row, { chip }, nil, setEnabled)
         end
 
         local function addColorPicker(section, cfg)
                 cfg = cfg or {}
-                local row = makeRow(section, GEO.RowH)
+                local row, face, rh = makeRow(section, GEO.RowH, toWidth(cfg.Width, nil))
                 local hexW = rnd(math.max(44, measureText("#0070F3", 12, F.Mono)))
-                rowLabel(row, cfg.Text, hexW + 9 + GEO.Swatch + 22)
+                local lbl = rowLabel(row, cfg.Text, hexW + 9 + GEO.Swatch + 22)
 
                 local trigger = New("TextButton", {
                         AnchorPoint = Vector2.new(1, 0.5),
@@ -2313,7 +2486,7 @@ function Reborn:CreateWindow(config)
                         Parent = trigger,
                 })
                 corner(swatch, 6)
-                feather(swatch, 6, theme.LineStrong)
+                local swh = feather(swatch, 6, theme.LineStrong)
                 local swatchFace = New("Frame", {
                         Position = UDim2.new(0, 1, 0, 1),
                         Size = UDim2.new(1, -2, 1, -2),
@@ -2566,7 +2739,9 @@ function Reborn:CreateWindow(config)
                                 unregisterPop(pop)
                         end
                 end
+                local disabled = false
                 trigger.Activated:Connect(function()
+                        if disabled then return end
                         setOpen(not open)
                 end)
                 registerSearch(row, cfg.Text, section)
@@ -2577,13 +2752,23 @@ function Reborn:CreateWindow(config)
                         h, s, v = Color3.toHSV(c)
                         render(fire and true or false)
                 end
-                return finishElement("ColorPicker", cp, cfg, row, { trigger }, pop)
+                local function setEnabled(v)
+                        disabled = not v
+                        setRowDim(row, face, rh, disabled)
+                        if disabled and open then setOpen(false) end
+                        lbl.TextTransparency = disabled and 0.5 or 0
+                        hexLbl.TextTransparency = disabled and 0.5 or 0
+                        swatch.BackgroundTransparency = disabled and 0.45 or 0
+                        swatchFace.BackgroundTransparency = disabled and 0.45 or 0
+                        swh.BackgroundTransparency = disabled and 0.85 or 0.5
+                end
+                return finishElement("ColorPicker", cp, cfg, row, { trigger }, pop, setEnabled)
         end
 
         local function addInput(section, cfg)
                 cfg = cfg or {}
-                local row = makeRow(section, GEO.RowH)
-                rowLabel(row, cfg.Text, 202)
+                local row, face, rh = makeRow(section, GEO.RowH, toWidth(cfg.Width, nil))
+                local lbl = rowLabel(row, cfg.Text, 202)
 
                 local field = New("Frame", {
                         AnchorPoint = Vector2.new(1, 0.5),
@@ -2616,6 +2801,9 @@ function Reborn:CreateWindow(config)
                 corner(box, 5)
                 padding(box, 0, 10, 0, 10)
 
+                local debounce = tonumber(cfg.Debounce)
+                if debounce ~= nil and debounce <= 0 then debounce = nil end
+                local dbGen = 0
                 box.Focused:Connect(function()
                         tween(field, 0.12, { BackgroundColor3 = theme.Accent })
                         tween(fh, 0.12, { BackgroundColor3 = theme.Accent })
@@ -2623,6 +2811,7 @@ function Reborn:CreateWindow(config)
                 box.FocusLost:Connect(function(enter)
                         tween(field, 0.12, { BackgroundColor3 = theme.LineStrong })
                         tween(fh, 0.12, { BackgroundColor3 = theme.LineStrong })
+                        dbGen = dbGen + 1
                         if cfg.Callback then cfg.Callback(box.Text, enter and true or false) end
                 end)
                 registerSearch(row, cfg.Text, section)
@@ -2634,16 +2823,44 @@ function Reborn:CreateWindow(config)
                 end
                 box:GetPropertyChangedSignal("Text"):Connect(function()
                         inp.Text = box.Text
-                        if cfg.Live and cfg.Callback then cfg.Callback(box.Text, false) end
+                        if cfg.Live and cfg.Callback then
+                                if debounce then
+                                        dbGen = dbGen + 1
+                                        local g = dbGen
+                                        task.delay(debounce, function()
+                                                if g == dbGen and cfg.Callback then cfg.Callback(box.Text, false) end
+                                        end)
+                                else
+                                        cfg.Callback(box.Text, false)
+                                end
+                        end
                 end)
-                return finishElement("Input", inp, cfg, row, { field, box })
+                local function setEnabled(v)
+                        local d = not v
+                        setRowDim(row, face, rh, d)
+                        lbl.TextTransparency = d and 0.5 or 0
+                        box.TextEditable = not d
+                        box.Active = not d
+                        box.TextTransparency = d and 0.5 or 0
+                        field.BackgroundTransparency = d and 0.45 or 0
+                        fh.BackgroundTransparency = d and 0.85 or 0.5
+                        if d then
+                                box:ReleaseFocus()
+                        end
+                end
+                return finishElement("Input", inp, cfg, row, { field, box }, nil, setEnabled)
         end
 
         local function addButton(section, cfg)
                 cfg = cfg or {}
                 local primary = cfg.Primary and true or false
+                local btext = tostring(cfg.Text or "Button")
+                local wUD = toWidth(cfg.Width, UDim.new(1, 0))
+                if type(cfg.Width) == "string" and string.find(string.lower(cfg.Width), "auto", 1, true) then
+                        wUD = UDim.new(0, math.max(46, rnd(measureText(btext, 13, F.Semibold)) + 28))
+                end
                 local shell = New("Frame", {
-                        Size = UDim2.new(1, 0, 0, GEO.RowH),
+                        Size = UDim2.new(wUD.Scale, wUD.Offset, 0, GEO.RowH),
                         BackgroundColor3 = primary and theme.Accent or theme.Line,
                         BorderSizePixel = 0,
                         ZIndex = 1,
@@ -2656,18 +2873,21 @@ function Reborn:CreateWindow(config)
                         Size = UDim2.new(1, -2, 1, -2),
                         BackgroundColor3 = primary and theme.Accent or theme.RowHover,
                         BackgroundTransparency = primary and 0 or 1,
-                        Text = tostring(cfg.Text or "Button"),
+                        Text = btext,
                         Font = F.Semibold,
                         TextSize = 13,
                         TextColor3 = primary and Color3.new(1, 1, 1) or theme.TextMuted,
+                        TextTruncate = Enum.TextTruncate.AtEnd,
                         AutoButtonColor = false,
                         BorderSizePixel = 0,
                         ZIndex = 2,
                         Parent = shell,
                 })
                 corner(btn, 7)
+                local disabled = false
                 if primary then
                         btn.MouseEnter:Connect(function()
+                                if disabled then return end
                                 tween(btn, 0.13, { BackgroundColor3 = theme.AccentHover })
                                 tween(shell, 0.13, { BackgroundColor3 = theme.AccentHover })
                                 tween(bh, 0.13, { BackgroundColor3 = theme.AccentHover })
@@ -2679,6 +2899,7 @@ function Reborn:CreateWindow(config)
                         end)
                 else
                         btn.MouseEnter:Connect(function()
+                                if disabled then return end
                                 tween(btn, 0.13, { BackgroundTransparency = 0 })
                                 tween(btn, 0.13, { TextColor3 = theme.Text })
                                 tween(shell, 0.13, { BackgroundColor3 = theme.LineStrong })
@@ -2692,6 +2913,7 @@ function Reborn:CreateWindow(config)
                         end)
                 end
                 btn.Activated:Connect(function()
+                        if disabled then return end
                         if cfg.Callback then cfg.Callback() end
                 end)
                 registerSearch(shell, cfg.Text, section)
@@ -2699,7 +2921,22 @@ function Reborn:CreateWindow(config)
                 function b:Set(text)
                         btn.Text = tostring(text)
                 end
-                return finishElement("Button", b, cfg, shell, { btn })
+                local function setEnabled(v)
+                        local d = not v
+                        disabled = d
+                        btn.TextTransparency = d and 0.5 or 0
+                        killTween(btn, "BackgroundTransparency")
+                        killTween(btn, "TextColor3")
+                        killTween(shell, "BackgroundColor3")
+                        killTween(bh, "BackgroundColor3")
+                        shell.BackgroundColor3 = primary and theme.Accent or theme.Line
+                        bh.BackgroundColor3 = primary and theme.Accent or theme.Line
+                        btn.TextColor3 = primary and Color3.new(1, 1, 1) or theme.TextMuted
+                        btn.BackgroundTransparency = primary and (d and 0.45 or 0) or 1
+                        shell.BackgroundTransparency = d and 0.45 or 0
+                        bh.BackgroundTransparency = d and 0.85 or 0.5
+                end
+                return finishElement("Button", b, cfg, shell, { btn }, nil, setEnabled)
         end
 
         local function addParagraph(section, cfg)
@@ -2723,7 +2960,10 @@ function Reborn:CreateWindow(config)
                 function p:Set(text)
                         lbl.Text = tostring(text)
                 end
-                return finishElement("Paragraph", p, cfg, lbl, { lbl })
+                local function setEnabled(v)
+                        lbl.TextTransparency = v and 0 or 0.5
+                end
+                return finishElement("Paragraph", p, cfg, lbl, { lbl }, nil, setEnabled)
         end
 
         local function toAsset(v)
@@ -2753,7 +2993,7 @@ function Reborn:CreateWindow(config)
                 local h = clamp(rnd(tonumber(cfg.Height) or GEO.ImageH), GEO.ImageMinH, GEO.ImageMaxH)
                 local st = toScaleType(cfg.ScaleType)
                 local r = clamp(rnd(tonumber(cfg.CornerRadius) or 7), 0, 8)
-                local row, face = makeRow(section, h)
+                local row, face, rh = makeRow(section, h, toWidth(cfg.Width, nil))
                 local img = New("ImageLabel", {
                         Size = UDim2.new(1, 0, 1, 0),
                         BackgroundTransparency = 1,
@@ -2764,9 +3004,11 @@ function Reborn:CreateWindow(config)
                 })
                 corner(img, r)
                 local ov = nil
+                local imgDisabled = false
                 if cfg.Callback then
                         ov = overlayBtn(row)
                         ov.Activated:Connect(function()
+                                if imgDisabled then return end
                                 if cfg.Callback then cfg.Callback() end
                         end)
                         ov.MouseEnter:Connect(function()
@@ -2782,7 +3024,365 @@ function Reborn:CreateWindow(config)
                         img.Image = toAsset(v) or ""
                 end
                 o.Set = o.SetImage
-                return finishElement("Image", o, cfg, row, ov and { ov } or { img })
+                local function setEnabled(v)
+                        imgDisabled = not v
+                        setRowDim(row, face, rh, imgDisabled)
+                        img.ImageTransparency = imgDisabled and 0.5 or 0
+                end
+                return finishElement("Image", o, cfg, row, ov and { ov } or { img }, nil, setEnabled)
+        end
+
+        local function addList(section, cfg)
+                cfg = cfg or {}
+                if cfg.Callback == nil and cfg.SelectionChanged ~= nil then
+                        cfg.Callback = cfg.SelectionChanged
+                end
+                local baseH = clamp(rnd(tonumber(cfg.Height) or GEO.ListH), GEO.ListMinH, GEO.ListMaxH)
+                local maxH = math.max(clamp(rnd(tonumber(cfg.MaxHeight) or GEO.ListMaxH), GEO.ListMinH, 2000), baseH)
+                local row, face, rh = makeRow(section, baseH)
+                local lbl = nil
+                if cfg.Text ~= nil and tostring(cfg.Text) ~= "" then
+                        lbl = New("TextLabel", {
+                                Position = UDim2.new(0, GEO.RowPad, 0, 8),
+                                Size = UDim2.new(1, -GEO.RowPad * 2, 0, 14),
+                                BackgroundTransparency = 1,
+                                Font = F.Semibold,
+                                TextSize = 11,
+                                TextColor3 = theme.TextFaint,
+                                TextXAlignment = Enum.TextXAlignment.Left,
+                                TextTruncate = Enum.TextTruncate.AtEnd,
+                                Text = string.upper(tostring(cfg.Text)),
+                                ZIndex = 5,
+                                Parent = row,
+                        })
+                end
+                local scroll = New("ScrollingFrame", {
+                        Position = UDim2.new(0, 5, 0, lbl and 27 or 5),
+                        Size = UDim2.new(1, -10, 1, lbl and -32 or -10),
+                        BackgroundTransparency = 1,
+                        BorderSizePixel = 0,
+                        ScrollBarThickness = 4,
+                        ScrollBarImageColor3 = theme.LineStrong,
+                        ScrollingDirection = Enum.ScrollingDirection.Y,
+                        CanvasSize = UDim2.new(0, 0, 0, 0),
+                        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+                        ZIndex = 2,
+                        Parent = face,
+                })
+                New("UIListLayout", {
+                        Padding = UDim.new(0, 2),
+                        SortOrder = Enum.SortOrder.LayoutOrder,
+                        FillDirection = Enum.FillDirection.Vertical,
+                        Parent = scroll,
+                })
+                local emptyLbl = New("TextLabel", {
+                        Size = UDim2.new(1, -16, 0, GEO.OptH),
+                        BackgroundTransparency = 1,
+                        Font = F.Medium,
+                        TextSize = 13,
+                        TextColor3 = theme.TextFaint,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        Text = "No items",
+                        Parent = scroll,
+                })
+                local items = {}
+                local sumH = 0
+                local nextOrder = 1
+                local selectedRec = nil
+                local lstDisabled = false
+                local lst = { Selected = nil }
+
+                local function fitHeight()
+                        local n = #items
+                        local total = 10 + sumH + (n > 1 and (n - 1) * 2 or 0)
+                        row.Size = UDim2.new(1, 0, 0, clamp(total, baseH, maxH))
+                        emptyLbl.Visible = n == 0
+                end
+                local function indexOf(rec)
+                        for i, r in ipairs(items) do
+                                if r == rec then return i end
+                        end
+                        return nil
+                end
+                local function applySel(rec, on)
+                        rec._sel = on
+                        rec.bar.Visible = on
+                        rec.frame.BackgroundColor3 = theme.Accent
+                        rec.frame.BackgroundTransparency = on and 0.85 or 1
+                        rec.primary.TextColor3 = on and theme.Text or theme.TextMuted
+                end
+                local function selectRec(rec, fire)
+                        if selectedRec and selectedRec ~= rec then
+                                applySel(selectedRec, false)
+                        end
+                        selectedRec = rec
+                        if rec then applySel(rec, true) end
+                        local i = rec ~= nil and indexOf(rec) or nil
+                        lst.Selected = i
+                        if fire and cfg.Callback then
+                                cfg.Callback(rec ~= nil and rec.item or nil, i)
+                        end
+                end
+                local function buildItem(item)
+                        if type(item) ~= "table" then item = { Text = item } end
+                        local primary = tostring(item.Text or "")
+                        local secondary = item.Secondary ~= nil and tostring(item.Secondary) or nil
+                        local trailing = item.Trailing ~= nil and tostring(item.Trailing) or nil
+                        local ih = secondary and (GEO.OptH + 10) or GEO.OptH
+                        local ob = New("TextButton", {
+                                Size = UDim2.new(1, -6, 0, ih),
+                                BackgroundTransparency = 1,
+                                BackgroundColor3 = theme.Accent,
+                                Text = "",
+                                AutoButtonColor = false,
+                                LayoutOrder = nextOrder,
+                                Parent = scroll,
+                        })
+                        nextOrder = nextOrder + 1
+                        corner(ob, 6)
+                        local bar = New("Frame", {
+                                Position = UDim2.new(0, 4, 0.5, 0),
+                                Size = UDim2.new(0, 3, 0, ih - 12),
+                                BackgroundColor3 = theme.Accent,
+                                BorderSizePixel = 0,
+                                Visible = false,
+                                ZIndex = 2,
+                                Parent = ob,
+                        })
+                        corner(bar, 2)
+                        local ic = nil
+                        if item.Icon ~= nil then
+                                ic = icon(ob, tostring(item.Icon), 16, theme.TextMuted)
+                                if ic then
+                                        ic.AnchorPoint = Vector2.new(0, 0.5)
+                                        ic.Position = UDim2.new(0, 12, 0.5, 0)
+                                        ic.ZIndex = 2
+                                end
+                        end
+                        local tx0 = ic ~= nil and 36 or 12
+                        local trailRes = trailing and (rnd(measureText(trailing, 11, F.Regular)) + 14) or 0
+                        local prim
+                        if secondary then
+                                prim = New("TextLabel", {
+                                        Position = UDim2.new(0, tx0, 0, 5),
+                                        Size = UDim2.new(1, -(tx0 + 12 + trailRes), 0, 16),
+                                        BackgroundTransparency = 1,
+                                        Font = F.Medium,
+                                        TextSize = 13,
+                                        TextColor3 = theme.TextMuted,
+                                        TextXAlignment = Enum.TextXAlignment.Left,
+                                        TextTruncate = Enum.TextTruncate.AtEnd,
+                                        Text = primary,
+                                        ZIndex = 2,
+                                        Parent = ob,
+                                })
+                                New("TextLabel", {
+                                        Position = UDim2.new(0, tx0, 0, 21),
+                                        Size = UDim2.new(1, -(tx0 + 12 + trailRes), 0, 14),
+                                        BackgroundTransparency = 1,
+                                        Font = F.Regular,
+                                        TextSize = 11,
+                                        TextColor3 = theme.TextFaint,
+                                        TextXAlignment = Enum.TextXAlignment.Left,
+                                        TextTruncate = Enum.TextTruncate.AtEnd,
+                                        Text = secondary,
+                                        ZIndex = 2,
+                                        Parent = ob,
+                                })
+                        else
+                                prim = New("TextLabel", {
+                                        AnchorPoint = Vector2.new(0, 0.5),
+                                        Position = UDim2.new(0, tx0, 0.5, 0),
+                                        Size = UDim2.new(1, -(tx0 + 12 + trailRes), 0, 16),
+                                        BackgroundTransparency = 1,
+                                        Font = F.Medium,
+                                        TextSize = 13,
+                                        TextColor3 = theme.TextMuted,
+                                        TextXAlignment = Enum.TextXAlignment.Left,
+                                        TextTruncate = Enum.TextTruncate.AtEnd,
+                                        Text = primary,
+                                        ZIndex = 2,
+                                        Parent = ob,
+                                })
+                        end
+                        if trailing then
+                                New("TextLabel", {
+                                        AnchorPoint = Vector2.new(1, 0.5),
+                                        Position = UDim2.new(1, -10, 0.5, 0),
+                                        Size = UDim2.new(0, rnd(measureText(trailing, 11, F.Regular)) + 4, 0, 14),
+                                        BackgroundTransparency = 1,
+                                        Font = F.Regular,
+                                        TextSize = 11,
+                                        TextColor3 = theme.TextFaint,
+                                        TextXAlignment = Enum.TextXAlignment.Right,
+                                        TextTruncate = Enum.TextTruncate.AtEnd,
+                                        Text = trailing,
+                                        ZIndex = 2,
+                                        Parent = ob,
+                                })
+                        end
+                        local rec
+                        ob.MouseEnter:Connect(function()
+                                if lstDisabled then return end
+                                if not rec._sel then
+                                        tween(ob, 0.1, { BackgroundTransparency = 0.93 })
+                                end
+                                tween(prim, 0.1, { TextColor3 = theme.Text })
+                        end)
+                        ob.MouseLeave:Connect(function()
+                                tween(ob, 0.1, { BackgroundTransparency = rec._sel and 0.85 or 1 })
+                                tween(prim, 0.1, { TextColor3 = rec._sel and theme.Text or theme.TextMuted })
+                        end)
+                        ob.Activated:Connect(function()
+                                if lstDisabled then return end
+                                selectRec(rec, true)
+                        end)
+                        rec = { frame = ob, bar = bar, primary = prim, item = item, h = ih }
+                        table.insert(items, rec)
+                        sumH = sumH + ih
+                        fitHeight()
+                        return #items
+                end
+
+                function lst:Add(item)
+                        return buildItem(item)
+                end
+                function lst:Remove(index)
+                        if type(index) ~= "number" then return false end
+                        index = math.floor(index)
+                        if index < 1 or index > #items then return false end
+                        local rec = items[index]
+                        table.remove(items, index)
+                        sumH = sumH - rec.h
+                        if selectedRec == rec then
+                                selectedRec = nil
+                                lst.Selected = nil
+                        end
+                        rec.frame:Destroy()
+                        fitHeight()
+                        return true
+                end
+                function lst:Clear()
+                        for _, rec in ipairs(items) do
+                                rec.frame:Destroy()
+                        end
+                        items = {}
+                        sumH = 0
+                        selectedRec = nil
+                        lst.Selected = nil
+                        fitHeight()
+                end
+                function lst:SetItems(t)
+                        lst:Clear()
+                        if type(t) == "table" then
+                                for _, item in ipairs(t) do
+                                        buildItem(item)
+                                end
+                        end
+                end
+                function lst:SetSelected(index, fire)
+                        if index == nil then
+                                selectRec(nil, fire and true or false)
+                                return
+                        end
+                        if type(index) ~= "number" then return end
+                        index = math.floor(index)
+                        if index < 1 or index > #items then return end
+                        selectRec(items[index], fire and true or false)
+                end
+                function lst:Set(v, fire)
+                        lst:SetSelected(v, fire)
+                end
+                registerSearch(row, cfg.Text, section)
+                local function setEnabled(v)
+                        lstDisabled = not v
+                        setRowDim(row, face, rh, lstDisabled)
+                        if lbl then lbl.TextTransparency = lstDisabled and 0.5 or 0 end
+                        emptyLbl.TextTransparency = lstDisabled and 0.5 or 0
+                        for _, rec in ipairs(items) do
+                                rec.primary.TextTransparency = lstDisabled and 0.5 or 0
+                                rec.frame.BackgroundTransparency = rec._sel and 0.85 or 1
+                        end
+                end
+                return finishElement("List", lst, cfg, row, { row }, nil, setEnabled)
+        end
+
+        local function addRowContainer(section, cfg)
+                cfg = cfg or {}
+                local gap = tonumber(cfg.Gap) or GEO.GridGap
+                local container = New("Frame", {
+                        Size = UDim2.new(1, 0, 0, GEO.RowH),
+                        BackgroundTransparency = 1,
+                        BorderSizePixel = 0,
+                        Parent = section.Rows,
+                })
+                New("UIListLayout", {
+                        Padding = UDim.new(0, gap),
+                        SortOrder = Enum.SortOrder.LayoutOrder,
+                        FillDirection = Enum.FillDirection.Horizontal,
+                        Parent = container,
+                })
+                local r = {
+                        Frame = container,
+                        Rows = container,
+                        _parent = section,
+                        _isRow = true,
+                        _cells = {},
+                        _children = {},
+                }
+                local function addCell(el, c)
+                        table.insert(r._children, el)
+                        table.insert(r._cells, { frame = el._row, fixed = c and c.Width ~= nil or false })
+                        local n = #r._cells
+                        local share = rnd(gap * (n - 1) / n)
+                        for i, cell in ipairs(r._cells) do
+                                cell.frame.LayoutOrder = i
+                                if not cell.fixed then
+                                        cell.frame.Size = UDim2.new(1 / n, -share, 0, cell.frame.Size.Y.Offset)
+                                end
+                        end
+                end
+                function r:Button(a, b)
+                        local c = normCfg(a, b)
+                        local el = addButton(self, c)
+                        addCell(el, c)
+                        return el
+                end
+                function r:Toggle(a, b)
+                        local c = normCfg(a, b)
+                        local el = addToggle(self, c)
+                        addCell(el, c)
+                        return el
+                end
+                function r:Dropdown(a, b)
+                        local c = normCfg(a, b)
+                        local el = addDropdown(self, c)
+                        addCell(el, c)
+                        return el
+                end
+                function r:Keybind(a, b)
+                        local c = normCfg(a, b)
+                        local el = addKeybind(self, c)
+                        addCell(el, c)
+                        return el
+                end
+                function r:ColorPicker(a, b)
+                        local c = normCfg(a, b)
+                        local el = addColorPicker(self, c)
+                        addCell(el, c)
+                        return el
+                end
+                finishElement("Row", r, cfg, container, { container })
+                local baseDestroy = r.Destroy
+                function r:Destroy()
+                        for _, child in ipairs(r._children) do
+                                pcall(function()
+                                        child:Destroy()
+                                end)
+                        end
+                        baseDestroy(self)
+                end
+                return r
         end
 
         local function newSection(tab, name, badge)
@@ -2872,6 +3472,8 @@ function Reborn:CreateWindow(config)
                 function section:Button(a, b) return addButton(section, normCfg(a, b)) end
                 function section:Paragraph(a, b) return addParagraph(section, normCfg(a, b)) end
                 function section:Image(a, b) return addImage(section, normCfg(a, b)) end
+                function section:List(a, b) return addList(section, normCfg(a, b)) end
+                function section:Row(a, b) return addRowContainer(section, normCfg(a, b)) end
                 return section
         end
 
@@ -3141,6 +3743,8 @@ function Reborn:CreateWindow(config)
                                         out[flag] = el.Text
                                 elseif k == "Image" then
                                         out[flag] = el.Image.Image
+                                elseif k == "List" then
+                                        out[flag] = el.Selected
                                 end
                         end
                 end

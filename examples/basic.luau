@@ -168,6 +168,114 @@ Environment:Slider({
         Callback = function(v) print("[Reborn] brightness:", v) end,
 })
 
+local Advanced = Window:Tab("Advanced", "terminal")
+
+local Players = game:GetService("Players")
+
+local PlayersSec = Advanced:Section("Player list")
+local playerList = PlayersSec:List({
+        Text = "Online",
+        Height = 130,
+        MaxHeight = 200,
+        Flag = "player_selected",
+        SelectionChanged = function(item, index)
+                if item then print("[Reborn] selected:", item.Text, "at", index) end
+        end,
+})
+local function syncPlayers()
+        local entries = {}
+        for _, p in ipairs(Players:GetPlayers()) do
+                table.insert(entries, {
+                        Text = p.DisplayName,
+                        Secondary = "@" .. p.Name,
+                        Icon = "users",
+                        Trailing = p.UserId == Players.LocalPlayer.UserId and "you" or nil,
+                })
+        end
+        playerList:SetItems(entries)
+end
+syncPlayers()
+Players.PlayerAdded:Connect(syncPlayers)
+Players.PlayerRemoving:Connect(syncPlayers)
+local listRowA = PlayersSec:Row()
+listRowA:Button({
+        Text = "Select first",
+        Callback = function()
+                playerList:SetSelected(1, true)
+        end,
+})
+local listRowB = PlayersSec:Row()
+listRowB:Button({
+        Text = "Clear selection",
+        Callback = function()
+                playerList:SetSelected(nil)
+        end,
+})
+
+local States = Advanced:Section("States")
+local victims = {}
+States:Toggle({
+        Text = "Enable controls below",
+        Value = true,
+        Callback = function(v)
+                for _, el in ipairs(victims) do
+                        el:SetEnabled(v)
+                end
+        end,
+})
+victims[1] = States:Button({ Text = "Button", Callback = function() print("[Reborn] states: button") end })
+victims[2] = States:Toggle({ Text = "Toggle", Callback = function(v) print("[Reborn] states: toggle", v) end })
+victims[3] = States:Slider({ Text = "Slider", Min = 0, Max = 100, Value = 50, Callback = function(v) print("[Reborn] states: slider", v) end })
+victims[4] = States:Input({ Text = "Input", Placeholder = "type...", Callback = function(t) print("[Reborn] states: input", t) end })
+victims[5] = States:Dropdown({ Text = "Dropdown", Options = { "A", "B", "C" }, Callback = function(v) print("[Reborn] states: dropdown", v) end })
+victims[6] = States:Keybind({ Text = "Keybind", Value = "None", Callback = function(a) print("[Reborn] states: keybind", a) end })
+victims[7] = States:ColorPicker({ Text = "Color", Callback = function(hex) print("[Reborn] states: color", hex) end })
+
+local Layout = Advanced:Section("Row layout & sizing")
+local rowDemo = Layout:Row()
+rowDemo:Button({ Text = "One", Primary = true, Callback = function() print("[Reborn] row: one") end })
+rowDemo:Button({ Text = "Two", Callback = function() print("[Reborn] row: two") end })
+rowDemo:Button({ Text = "Three", Callback = function() print("[Reborn] row: three") end })
+local mixed = Layout:Row({ Gap = 6 })
+mixed:Button({ Text = "Auto", Width = "auto", Callback = function() print("[Reborn] row: auto") end })
+mixed:Button({ Text = "120px", Width = 120, Callback = function() print("[Reborn] row: fixed") end })
+Layout:Button({ Text = "Half width", Width = 0.5, Callback = function() print("[Reborn] half width") end })
+Layout:Button({ Text = "Hug content", Width = "auto", Callback = function() print("[Reborn] hug") end })
+
+local Runtime = Advanced:Section("Runtime APIs")
+local rangeDemo = Runtime:Slider({
+        Text = "Range demo",
+        Min = 0,
+        Max = 100,
+        Value = 50,
+        Format = function(v)
+                return string.format("%.0f%%", v)
+        end,
+})
+local rangeRow = Runtime:Row()
+rangeRow:Button({ Text = "Range 0-10", Callback = function() rangeDemo:SetRange(0, 10) end })
+rangeRow:Button({ Text = "Range 0-1000", Callback = function() rangeDemo:SetRange(0, 1000) end })
+local dyn = Runtime:Dropdown({
+        Text = "Dynamic options",
+        Options = { "v1", "v2" },
+        Callback = function(v) print("[Reborn] dynamic:", v) end,
+})
+Runtime:Button({
+        Text = "Repopulate options",
+        Callback = function()
+                dyn:SetOptions({ "alpha", "beta", "gamma", "delta" })
+        end,
+})
+Runtime:Input({
+        Text = "Debounced live",
+        Placeholder = "search...",
+        Live = true,
+        Debounce = 0.4,
+        Callback = function(text)
+                print("[Reborn] debounced:", text)
+        end,
+})
+
 local Settings = Window:Tab("Settings", "settings")
 
 local Interface = Settings:Section("Interface")
@@ -198,8 +306,9 @@ local nameInput = Config:Input({
                 print("[Reborn] config name committed:", text, enterPressed)
         end,
 })
-Config:Button({
-        Text = "Save config",
+local configRow = Config:Row()
+configRow:Button({
+        Text = "Save",
         Primary = true,
         Callback = function()
                 local name = nameInput.Text ~= "" and nameInput.Text or "my-config"
@@ -211,8 +320,8 @@ Config:Button({
                 })
         end,
 })
-Config:Button({
-        Text = "Load config",
+configRow:Button({
+        Text = "Load",
         Callback = function()
                 local name = nameInput.Text ~= "" and nameInput.Text or "my-config"
                 local cfg = Window:LoadConfig(name)
@@ -220,6 +329,18 @@ Config:Button({
                         Title = cfg and "Config loaded" or "No such config",
                         Description = cfg and ('"' .. name .. '" restored — ' .. tostring(#Window:GetConfig()) .. ' flagged values applied.') or ('Nothing saved under "' .. name .. '" yet.'),
                         Type = cfg and "success" or "error",
+                })
+        end,
+})
+configRow:Button({
+        Text = "Delete",
+        Callback = function()
+                local name = nameInput.Text ~= "" and nameInput.Text or "my-config"
+                local ok = Window:DeleteConfig(name)
+                Reborn:Notify({
+                        Title = ok and "Config deleted" or "Delete failed",
+                        Description = ok and ('"' .. name .. '" removed.') or ('Nothing saved under "' .. name .. '".'),
+                        Type = ok and "success" or "error",
                 })
         end,
 })

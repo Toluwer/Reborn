@@ -125,9 +125,9 @@ A selection of available names: `home`, `crosshair`, `eye`, `settings`, `swords`
 
 ### Section
 
-Every component takes a config table and returns an object with a `Set` method (`Image` returns `SetImage`, and also answers to `Set` for the config system). `Set(value, fire)` re-fires the callback only when `fire` is `true`. All config fields are optional; omitted values fall back to defaults (e.g. sliders default to `0–100`, dropdowns select the first option).
+Every component takes a config table and returns an object with a `Set` method (`Image` returns `SetImage`, `List` returns `SetSelected`, and both also answer to `Set` for the config system). `Set(value, fire)` re-fires the callback only when `fire` is `true`. All config fields are optional; omitted values fall back to defaults (e.g. sliders default to `0–100`, dropdowns select the first option).
 
-Every component also accepts `Tooltip` (hover hint), and every returned object exposes `SetVisible(bool)`, `SetTooltip(text)` and `Destroy()`. Dropdown options keep their original types — a numeric option comes back as a number.
+Every component also accepts `Tooltip` (hover hint), and every returned object exposes `SetVisible(bool)`, `SetTooltip(text)`, `Destroy()` and `SetEnabled(bool)`. Dropdown options keep their original types — a numeric option comes back as a number.
 
 Each component also accepts a string with an optional callback:
 
@@ -141,16 +141,29 @@ Section:Image("rbxassetid://12345678")
 | Component | Config | Object |
 | --- | --- | --- |
 | `Toggle` | `Text`, `Value` (bool), `Flag`, `Tooltip`, `Callback(value)` | `Set(value, fire?)` |
-| `Slider` | `Text`, `Min`, `Max`, `Step`, `Value`, `Suffix`, `Flag`, `Tooltip`, `Callback(value)` | `Set(value, fire?)` |
-| `Dropdown` | `Text`, `Options` (list), `Value`, `Multi` (bool), `Flag`, `Tooltip`, `Callback(selected or list)` | `Set(value, fire?)` |
+| `Slider` | `Text`, `Min`, `Max`, `Step`, `Value`, `Suffix`, `Format` (fn), `Flag`, `Tooltip`, `Callback(value)` | `Set(value, fire?)`, `SetRange(min, max)` |
+| `Dropdown` | `Text`, `Options` (list), `Value`, `Multi` (bool), `Flag`, `Tooltip`, `Callback(selected or list)` | `Set(value, fire?)`, `SetOptions(options)` |
 | `Keybind` | `Text`, `Value`, `Mode` (`"Always" / "Toggle" / "Hold"`), `Flag`, `Tooltip`, `Callback(...)` | `Set(name)` |
 | `ColorPicker` | `Text`, `Value` (`"#RRGGBB"` or `Color3`), `Flag`, `Tooltip`, `Callback(hex, color3)` | `Set(hex, fire?)` |
-| `Input` | `Text`, `Value`, `Placeholder`, `Live` (bool), `Flag`, `Tooltip`, `Callback(text, enterPressed)` | `Set(text)` |
-| `Button` | `Text`, `Primary` (bool), `Tooltip`, `Callback()` | `Set(text)` |
+| `Input` | `Text`, `Value`, `Placeholder`, `Live` (bool), `Debounce` (seconds), `Flag`, `Tooltip`, `Callback(text, enterPressed)` | `Set(text)` |
+| `Button` | `Text`, `Primary` (bool), `Width`, `Tooltip`, `Callback()` | `Set(text)` |
 | `Paragraph` | `Text` | `Set(text)` |
 | `Image` | `Image` (asset id number, id string, or URL), `Height`, `ScaleType`, `CornerRadius`, `Tooltip`, `Callback()` | `SetImage(source)` |
+| `List` | `Text`, `Height`, `MaxHeight`, `Flag`, `Tooltip`, `SelectionChanged(item, index)` | `Add(item)`, `Remove(index)`, `Clear()`, `SetItems(table)`, `SetSelected(index?, fire?)` |
 
 Images render as full-width plates that follow the window through resize and drag. `Image` accepts a plain asset id number (`12345678`), a bare digit string, or any URL — `rbxassetid://`, `rbxthumb://`, `rbxasset://` and `https://` pass through untouched, while numbers and digit strings are normalized to `rbxassetid://`. `ScaleType` defaults to `Crop` (fills the plate with rounded corners), `Fit` letterboxes inside the plate, `Stretch` distorts to fill. While the asset loads, the plate reads as the standard surface placeholder. A `Callback` turns the plate into a clickable image button with a subtle transparency lift on hover. Flagged images join the config system — `GetConfig` snapshots the applied source string and `SetConfig` restores it.
+
+`SetEnabled(false)` works on every element — Button, Toggle, Slider, Dropdown, Keybind, ColorPicker, Input, Image, List and Paragraph. A disabled element is visibly dimmed (labels at 50% transparency, muted plates), swallows all input (no hover effects, no clicks, keybinds stop firing, inputs stop accepting text, open popovers close and stay closed) and blocks its callback entirely — including programmatic `Set(value, true)`. `SetEnabled(true)` restores appearance and interactivity.
+
+The List element is a scrollable container for rows that change at runtime. Items are tables — `Text` (primary), `Secondary` (smaller muted line), `Icon` (icon name), `Trailing` (right-aligned text) — or plain strings. `Add` returns the new index and touches nothing else; `Remove`/`Clear`/`SetItems` keep the selection consistent (removing the selected row clears it, earlier selections shift down). The selected row carries an accent bar and an accent tint; clicking a row fires `SelectionChanged(item, index)` (also accepted as `Callback`), and `SetSelected(index, fire?)` follows the usual Set convention — pass `nil` to deselect. The plate auto-grows with content from `Height` (default 120, min 46) up to `MaxHeight` (default 260), then scrolls; hundreds of rows are fine — each `Add` is one frame plus a height recompute, and the canvas sizes itself. A flagged List snapshots its selected index (absent when nothing is selected).
+
+`Section:Row()` returns a horizontal container that packs 2-4 elements side by side: `row:Button(...)`, `row:Toggle(...)`, `row:Dropdown(...)`, `row:Keybind(...)` and `row:ColorPicker(...)` take the same configs as their section counterparts. Children without an explicit `Width` share the row evenly (`1/n` each); an explicit `Width` opts a child out of the split. `Gap` sets the spacing (default 8). `SetVisible`/`Destroy` work on the whole row — destroying a row destroys its children.
+
+`Width` also works on standalone elements: a number between 0 and 1 is a fraction of the section width, a number of 1 or more is fixed pixels, `"auto"` hugs the text (Button only), and the default stays full width so existing scripts are unaffected.
+
+Sliders: `Format = function(value) return string end` replaces the value label entirely (the `Suffix` is not appended), and `SetRange(min, max)` changes the range at runtime — the current value is re-snapped and clamped into the new range and re-rendered without firing the callback; invalid ranges (max <= min) are ignored and return `false`.
+
+Inputs: `Debounce = seconds` (with `Live = true`) batches keystroke callbacks — the callback fires once, `Debounce` seconds after the last keystroke; pressing Enter or blurring the field fires immediately and cancels the pending update. Dropdowns: `SetOptions(options)` repopulates after creation — the current value is kept when still present (multi keeps the intersection), otherwise the first option is selected silently, the popover height and search index rebuild, and an open popover closes.
 
 Keybind modes: `Always` fires `Callback(name, input, gameProcessed)` on every press. `Toggle` fires `Callback(active, name, ...)` — `true` on the first press, `false` on the next. `Hold` fires `Callback(true, ...)` on down and `Callback(false, ...)` on release. While listening, `Backspace` clears the bind and `Escape` cancels.
 
