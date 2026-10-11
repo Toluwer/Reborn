@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 
 local Reborn = {
-        Version = "0.9.1",
+        Version = "0.9.2",
         NotificationsEnabled = true,
         _windows = {},
         _configs = {},
@@ -2993,9 +2993,11 @@ function Reborn:CreateWindow(config)
                 local h = clamp(rnd(tonumber(cfg.Height) or GEO.ImageH), GEO.ImageMinH, GEO.ImageMaxH)
                 local st = toScaleType(cfg.ScaleType)
                 local r = clamp(rnd(tonumber(cfg.CornerRadius) or 7), 0, 8)
-                local row, face, rh = makeRow(section, h, toWidth(cfg.Width, nil))
+                local side = (cfg.Title ~= nil) or (cfg.Subtitle ~= nil) or (cfg.Meta ~= nil)
+                local row, face, rh = makeRow(section, h, toWidth(not side and cfg.Width, nil))
+                local artW = h - 2
                 local img = New("ImageLabel", {
-                        Size = UDim2.new(1, 0, 1, 0),
+                        Size = side and UDim2.new(0, artW, 1, 0) or UDim2.new(1, 0, 1, 0),
                         BackgroundTransparency = 1,
                         Image = src or "",
                         ScaleType = st,
@@ -3003,6 +3005,52 @@ function Reborn:CreateWindow(config)
                         Parent = face,
                 })
                 corner(img, r)
+                local titleLbl, subLbl, metaLbl
+                if side then
+                        local pad = 10
+                        local txt = New("Frame", {
+                                Position = UDim2.new(0, artW + pad, 0, 0),
+                                Size = UDim2.new(1, -(artW + pad), 1, 0),
+                                BackgroundTransparency = 1,
+                                BorderSizePixel = 0,
+                                Parent = face,
+                        })
+                        local tl = list(txt, 3)
+                        tl.VerticalAlignment = Enum.VerticalAlignment.Center
+                        local order = 0
+                        local function addLine(text, size, font, color, wrap)
+                                order = order + 1
+                                local props = {
+                                        Size = UDim2.new(1, 0, 0, wrap and 0 or size + 4),
+                                        BackgroundTransparency = 1,
+                                        Font = font,
+                                        TextSize = size,
+                                        TextColor3 = color,
+                                        TextXAlignment = Enum.TextXAlignment.Left,
+                                        TextYAlignment = Enum.TextYAlignment.Center,
+                                        LayoutOrder = order,
+                                        Text = tostring(text or ""),
+                                        BorderSizePixel = 0,
+                                        Parent = txt,
+                                }
+                                if wrap then
+                                        props.AutomaticSize = Enum.AutomaticSize.Y
+                                        props.TextWrapped = true
+                                else
+                                        props.TextTruncate = Enum.TextTruncate.AtEnd
+                                end
+                                return New("TextLabel", props)
+                        end
+                        if cfg.Title ~= nil then
+                                titleLbl = addLine(cfg.Title, 14, F.Semibold, theme.Text, true)
+                        end
+                        if cfg.Subtitle ~= nil then
+                                subLbl = addLine(cfg.Subtitle, 12, F.Regular, theme.TextMuted, true)
+                        end
+                        if cfg.Meta ~= nil then
+                                metaLbl = addLine(cfg.Meta, 11, F.Regular, theme.TextFaint, false)
+                        end
+                end
                 local ov = nil
                 local imgDisabled = false
                 if cfg.Callback then
@@ -3012,10 +3060,11 @@ function Reborn:CreateWindow(config)
                                 if cfg.Callback then cfg.Callback() end
                         end)
                         ov.MouseEnter:Connect(function()
+                                if imgDisabled then return end
                                 tween(img, 0.13, { ImageTransparency = 0.1 })
                         end)
                         ov.MouseLeave:Connect(function()
-                                tween(img, 0.13, { ImageTransparency = 0 })
+                                tween(img, 0.13, { ImageTransparency = imgDisabled and 0.5 or 0 })
                         end)
                 end
                 registerSearch(row, raw, section)
@@ -3024,10 +3073,22 @@ function Reborn:CreateWindow(config)
                         img.Image = toAsset(v) or ""
                 end
                 o.Set = o.SetImage
+                function o:SetTitle(v)
+                        if titleLbl then titleLbl.Text = tostring(v or "") end
+                end
+                function o:SetSubtitle(v)
+                        if subLbl then subLbl.Text = tostring(v or "") end
+                end
+                function o:SetMeta(v)
+                        if metaLbl then metaLbl.Text = tostring(v or "") end
+                end
                 local function setEnabled(v)
                         imgDisabled = not v
                         setRowDim(row, face, rh, imgDisabled)
                         img.ImageTransparency = imgDisabled and 0.5 or 0
+                        if titleLbl then titleLbl.TextTransparency = imgDisabled and 0.5 or 0 end
+                        if subLbl then subLbl.TextTransparency = imgDisabled and 0.5 or 0 end
+                        if metaLbl then metaLbl.TextTransparency = imgDisabled and 0.5 or 0 end
                 end
                 return finishElement("Image", o, cfg, row, ov and { ov } or { img }, nil, setEnabled)
         end
