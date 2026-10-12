@@ -2,11 +2,12 @@
 
 A dark, minimalist UI library for Roblox, implemented in a single Luau module.
 
-![version](https://img.shields.io/badge/version-v0.8.2-0070f3)
+![version](https://img.shields.io/badge/version-v0.9.3-0070f3)
 
 ## Features
 
 - Draggable, resizable window with a pill minimize and viewport snapping
+- Drag-and-drop HUD overlays with live-updating text lines (`CreateHUD`)
 - Sidebar tabs with optional icons and one- or two-column layouts
 - Toggles, sliders, dropdowns, keybinds, color pickers, text inputs, buttons, paragraphs
 - Multi-select dropdowns, keybind modes (`Always` / `Toggle` / `Hold`), hover tooltips
@@ -81,10 +82,11 @@ A full example is available at [`examples/basic.luau`](examples/basic.luau).
 | Member / method | Description |
 | --- | --- |
 | `Reborn:CreateWindow(config) -> Window` | Creates the window. `config`: `Title`, `Size` (Vector2), `Theme` (partial overrides), `Parent` (ScreenGui/Instance). All fields optional. |
+| `Reborn:CreateHUD(config) -> HUD` | Creates a floating HUD overlay outside the window. See the HUD section below. |
 | `Reborn:Notify(config)` | Shows a toast. Accepts a table (`Title`, `Description`, `Type` (`"info" / "success" / "error"`), `Duration`) or a shorthand: `Notify("Title", "Description")`. |
 | `Reborn.NotificationsEnabled` | Set `false` to mute all toasts. |
 | `Reborn.Theme` | Default theme table. Pass overrides via `CreateWindow`. |
-| `Reborn:Destroy()` | Destroys all windows and disconnects all input connections. |
+| `Reborn:Destroy()` | Destroys all windows and HUDs and disconnects all input connections. |
 
 ### Window
 
@@ -111,6 +113,33 @@ A full example is available at [`examples/basic.luau`](examples/basic.luau).
 | --- | --- |
 | `Tab:Section(name, badge?) -> Section` | Adds a section. `badge` renders a small chip next to the title. |
 | `Tab:SetColumns(2)` | Switches the page to a two-column layout. Existing sections are redistributed. |
+
+### HUD
+
+```lua
+local hud = Reborn:CreateHUD({
+    Title = "LootSight",                          -- small muted header line
+    Lines = {                                      -- stacked live text lines
+        { Text = "$12,400 in range - 87 items", Color = "Text",  TextSize = 15 },
+        { Text = "Best: Sword  $8,000 (34 studs)", Color = "Text" },
+        { Text = "You carry: $2,150 (6 items)",   Color = "Accent" },
+    },
+    Position = "TopCenter",   -- Top/Bottom x Left/Center/Right presets
+    Draggable = true,          -- drag to reposition, position remembered
+})
+```
+
+A HUD is a self-contained overlay in its own ScreenGui — it lives outside the window (no window required), renders as a toast-styled card (rounded, stroked, slightly translucent) that hugs its content, and stacks an optional small muted `Title` above the `Lines` list. Every line is a table (`Text`, `Color`, `TextSize`) or a plain string; `Color` accepts any theme key (`"Text"`, `"TextMuted"`, `"Accent"`, `"Success"`, ...) or a `Color3`, and `TextSize` defaults to 13 (clamped 8-24). `Position` presets combine Top/Bottom with Left/Center/Right (`"TopLeft"`, `"BottomCenter"`, ...; default `"TopCenter"`, 12px from the screen edge), and `Draggable` defaults to `true` — dragging converts the card to pixel coordinates, keeps it on screen, and the dropped position is remembered for the rest of the HUD's lifetime (a later `SetVisible(false)` / `SetVisible(true)` cycle restores it; re-running the script creates a fresh HUD at the preset).
+
+| Method | Description |
+| --- | --- |
+| `hud:SetLine(i, text)` | Updates line `i` in place. Accepts a string (text only) or a line table (`Text` / `Color` / `TextSize` restyled live). Returns `false` for out-of-range indexes. |
+| `hud:SetLines(table)` | Replaces every line (strings or tables). |
+| `hud:SetTitle(text)` | Updates the header line, creating it on demand if the HUD was made without one. |
+| `hud:SetVisible(bool)` | Hides / shows the card, restoring the last dragged position. |
+| `hud:Destroy()` | Destroys the ScreenGui and disconnects the drag connections. |
+
+Multiple HUDs can coexist with each other and with windows (`Reborn:Destroy()` cleans up everything); each carries its own optional `Theme` override table and `Parent` like `CreateWindow` does.
 
 ### Icons
 

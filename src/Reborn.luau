@@ -5,9 +5,10 @@ local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 
 local Reborn = {
-        Version = "0.9.2",
+        Version = "0.9.3",
         NotificationsEnabled = true,
         _windows = {},
+        _huds = {},
         _configs = {},
 }
 
@@ -79,6 +80,7 @@ local GEO = {
         ToastW       = 294,
         PillH        = 34,
         GridGap      = 8,
+        HUDMargin    = 12,
         ImageH       = 96,
         ImageMinH    = 24,
         ImageMaxH    = 400,
@@ -415,6 +417,7 @@ local function resolveParent(config)
 end
 
 local MARK = "__r"
+local MARK_HUD = "__rh"
 
 local function randomName()
         local t = {}
@@ -440,9 +443,9 @@ local function protectGui(g)
         end)
 end
 
-local function clearOld(parent)
+local function clearOld(parent, mark)
         for _, child in ipairs(parent:GetChildren()) do
-                if child:GetAttribute(MARK) then child:Destroy() end
+                if child:GetAttribute(mark or MARK) then child:Destroy() end
         end
 end
 
@@ -3944,7 +3947,202 @@ function Reborn:CreateWindow(config)
         return Window
 end
 
+function Reborn:CreateHUD(cfg)
+        cfg = cfg or {}
+        local theme = {}
+        for k, v in pairs(DEFAULT_THEME) do theme[k] = v end
+        if cfg.Theme then
+                for k, v in pairs(cfg.Theme) do theme[k] = v end
+        end
+
+        local parent, viaHidden = resolveParent(cfg)
+        for i = #Reborn._huds, 1, -1 do
+                local h = Reborn._huds[i]
+                if not h.Gui or h.Gui.Parent == nil then table.remove(Reborn._huds, i) end
+        end
+        clearOld(parent, MARK_HUD)
+
+        local gui = New("ScreenGui", {
+                Name = randomName(),
+                ResetOnSpawn = false,
+                IgnoreGuiInset = true,
+                ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+                DisplayOrder = nextOrder(),
+        })
+        gui:SetAttribute(MARK_HUD, true)
+        if not viaHidden then protectGui(gui) end
+        gui.Parent = parent
+
+        local conns = {}
+        local function connect(signal, fn)
+                local c = signal:Connect(fn)
+                table.insert(conns, c)
+                return c
+        end
+
+        local function toHudColor(c)
+                if typeof and typeof(c) == "Color3" then return c end
+                if type(c) == "string" then
+                        local v = theme[c]
+                        if typeof and typeof(v) == "Color3" then return v end
+                end
+                return theme.Text
+        end
+        local function normLine(l)
+                if type(l) ~= "table" then l = { Text = l } end
+                return l
+        end
+
+        local pos = type(cfg.Position) == "string" and string.lower(cfg.Position) or "topcenter"
+        local ax = string.find(pos, "left", 1, true) and 0 or string.find(pos, "right", 1, true) and 1 or 0.5
+        local ay = string.find(pos, "top", 1, true) and 0 or string.find(pos, "bottom", 1, true) and 1 or 0.5
+        local ox = ax == 0 and GEO.HUDMargin or ax == 1 and -GEO.HUDMargin or 0
+        local oy = ay == 0 and GEO.HUDMargin or ay == 1 and -GEO.HUDMargin or 0
+
+        local card = New("Frame", {
+                AnchorPoint = Vector2.new(ax, ay),
+                Position = UDim2.new(ax, ox, ay, oy),
+                AutomaticSize = Enum.AutomaticSize.XY,
+                BackgroundColor3 = theme.Overlay,
+                BackgroundTransparency = 0.06,
+                BorderSizePixel = 0,
+                Parent = gui,
+        })
+        corner(card, 8)
+        stroke(card, theme.LineStrong)
+        padding(card, 11, 12, 11, 12)
+        list(card, 3)
+
+        local hud = { Gui = gui, Frame = card }
+        local titleLbl = nil
+        local function buildTitle(text)
+                if titleLbl == nil then
+                        titleLbl = New("TextLabel", {
+                                Size = UDim2.new(0, 0, 0, 14),
+                                AutomaticSize = Enum.AutomaticSize.X,
+                                BackgroundTransparency = 1,
+                                Font = F.Semibold,
+                                TextSize = 11,
+                                TextColor3 = theme.TextFaint,
+                                TextXAlignment = Enum.TextXAlignment.Left,
+                                Text = tostring(text or ""),
+                                LayoutOrder = 0,
+                                Parent = card,
+                        })
+                        hud.Title = titleLbl
+                else
+                        titleLbl.Text = tostring(text or "")
+                end
+        end
+        if cfg.Title ~= nil then buildTitle(cfg.Title) end
+
+        local lineLbls = {}
+        local function buildLine(l, order)
+                local ts = clamp(rnd(tonumber(l.TextSize) or 13), 8, 24)
+                return New("TextLabel", {
+                        Size = UDim2.new(0, 0, 0, ts + 4),
+                        AutomaticSize = Enum.AutomaticSize.X,
+                        BackgroundTransparency = 1,
+                        Font = F.Medium,
+                        TextSize = ts,
+                        TextColor3 = toHudColor(l.Color),
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        Text = tostring(l.Text or ""),
+                        LayoutOrder = order,
+                        Parent = card,
+                })
+        end
+        local function applyLines(t)
+                for _, lbl in ipairs(lineLbls) do
+                        lbl:Destroy()
+                end
+                lineLbls = {}
+                if type(t) ~= "table" then return end
+                for i, l in ipairs(t) do
+                        lineLbls[i] = buildLine(normLine(l), i)
+                end
+        end
+        applyLines(cfg.Lines)
+
+        local lastPos = nil
+        local dragState = nil
+        if cfg.Draggable ~= false then
+                card.InputBegan:Connect(function(input)
+                        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                                local ap = card.AbsolutePosition
+                                dragState = { sx = input.Position.X, sy = input.Position.Y, ox = ap.X, oy = ap.Y }
+                                card.AnchorPoint = Vector2.new(0, 0)
+                                card.Position = UDim2.new(0, rnd(ap.X), 0, rnd(ap.Y))
+                                lastPos = card.Position
+                        end
+                end)
+                connect(UserInputService.InputChanged, function(input)
+                        if dragState and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                                local cam = workspace.CurrentCamera
+                                local v = cam and cam.ViewportSize or Vector2.new(1920, 1080)
+                                local cw = card.AbsoluteSize.X
+                                local nx = clamp(dragState.ox + (input.Position.X - dragState.sx), -cw + 60, v.X - 60)
+                                local ny = clamp(dragState.oy + (input.Position.Y - dragState.sy), 0, v.Y - 30)
+                                card.Position = UDim2.new(0, rnd(nx), 0, rnd(ny))
+                                lastPos = card.Position
+                        end
+                end)
+                connect(UserInputService.InputEnded, function(input)
+                        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                                dragState = nil
+                        end
+                end)
+        end
+
+        function hud:SetTitle(text)
+                buildTitle(text)
+        end
+        function hud:SetLine(i, v)
+                if type(i) ~= "number" then return false end
+                i = math.floor(i)
+                local lbl = lineLbls[i]
+                if not lbl then return false end
+                if type(v) == "table" then
+                        v = normLine(v)
+                        local ts = clamp(rnd(tonumber(v.TextSize) or 13), 8, 24)
+                        lbl.Size = UDim2.new(0, 0, 0, ts + 4)
+                        lbl.TextSize = ts
+                        lbl.TextColor3 = toHudColor(v.Color)
+                        lbl.Text = tostring(v.Text or "")
+                else
+                        lbl.Text = tostring(v or "")
+                end
+                return true
+        end
+        function hud:SetLines(t)
+                applyLines(t)
+        end
+        function hud:SetVisible(v)
+                card.Visible = v and true or false
+                if v and lastPos then card.Position = lastPos end
+        end
+        function hud:Destroy()
+                for _, c in ipairs(conns) do
+                        pcall(function() c:Disconnect() end)
+                end
+                for i, h in ipairs(Reborn._huds) do
+                        if h == hud then
+                                table.remove(Reborn._huds, i)
+                                break
+                        end
+                end
+                gui:Destroy()
+        end
+
+        table.insert(Reborn._huds, hud)
+        return hud
+end
+
 function Reborn:Destroy()
+        for i = #self._huds, 1, -1 do
+                pcall(function() self._huds[i]:Destroy() end)
+        end
+        self._huds = {}
         for i = #self._windows, 1, -1 do
                 pcall(function() self._windows[i]:Destroy() end)
         end

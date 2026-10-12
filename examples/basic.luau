@@ -353,3 +353,24 @@ task.delay(2, function()
                 Type = "success",
         })
 end)
+
+local hud = Reborn:CreateHUD({
+        Title = "Reborn HUD",
+        Lines = {
+                { Text = "Drag me anywhere on screen", Color = "Text", TextSize = 15 },
+                { Text = "Presets: TopLeft / TopCenter / BottomRight ...", Color = "TextMuted" },
+                { Text = "Uptime: 0s", Color = "Accent" },
+        },
+        Position = "TopLeft",
+        Draggable = true,
+})
+task.spawn(function()
+        local n = 0
+        while hud.Frame.Parent do
+                task.wait(1)
+                n = n + 1
+                pcall(function()
+                        hud:SetLine(3, "Uptime: " .. n .. "s")
+                end)
+        end
+end)
