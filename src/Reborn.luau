@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 
 local Reborn = {
-        Version = "0.9.3",
+        Version = "0.9.4",
         NotificationsEnabled = true,
         _windows = {},
         _huds = {},
@@ -4003,13 +4003,13 @@ function Reborn:CreateHUD(cfg)
                 AnchorPoint = Vector2.new(ax, ay),
                 Position = UDim2.new(ax, ox, ay, oy),
                 AutomaticSize = Enum.AutomaticSize.XY,
-                BackgroundColor3 = theme.Overlay,
-                BackgroundTransparency = 0.06,
+                BackgroundColor3 = theme.Surface,
                 BorderSizePixel = 0,
                 Parent = gui,
         })
         corner(card, 8)
         stroke(card, theme.LineStrong)
+        feather(card, 8, theme.LineStrong)
         padding(card, 11, 12, 11, 12)
         list(card, 3)
 
