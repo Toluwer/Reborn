@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 
 local Reborn = {
-        Version = "0.9.4",
+        Version = "0.9.5",
         NotificationsEnabled = true,
         _windows = {},
         _huds = {},
@@ -4002,16 +4002,27 @@ function Reborn:CreateHUD(cfg)
         local card = New("Frame", {
                 AnchorPoint = Vector2.new(ax, ay),
                 Position = UDim2.new(ax, ox, ay, oy),
-                AutomaticSize = Enum.AutomaticSize.XY,
-                BackgroundColor3 = theme.Surface,
+                Size = UDim2.new(0, 26, 0, 24),
+                BackgroundColor3 = theme.LineStrong,
                 BorderSizePixel = 0,
                 Parent = gui,
         })
         corner(card, 8)
-        stroke(card, theme.LineStrong)
         feather(card, 8, theme.LineStrong)
-        padding(card, 11, 12, 11, 12)
-        list(card, 3)
+        local face = New("Frame", {
+                Position = UDim2.new(0, 1, 0, 1),
+                AutomaticSize = Enum.AutomaticSize.XY,
+                BackgroundColor3 = theme.Surface,
+                BorderSizePixel = 0,
+                Parent = card,
+        })
+        corner(face, 7)
+        padding(face, 11, 12, 11, 12)
+        list(face, 3)
+        face:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+                local s = face.AbsoluteSize
+                card.Size = UDim2.new(0, s.X + 2, 0, s.Y + 2)
+        end)
 
         local hud = { Gui = gui, Frame = card }
         local titleLbl = nil
@@ -4027,7 +4038,7 @@ function Reborn:CreateHUD(cfg)
                                 TextXAlignment = Enum.TextXAlignment.Left,
                                 Text = tostring(text or ""),
                                 LayoutOrder = 0,
-                                Parent = card,
+                                Parent = face,
                         })
                         hud.Title = titleLbl
                 else
@@ -4049,7 +4060,7 @@ function Reborn:CreateHUD(cfg)
                         TextXAlignment = Enum.TextXAlignment.Left,
                         Text = tostring(l.Text or ""),
                         LayoutOrder = order,
-                        Parent = card,
+                        Parent = face,
                 })
         end
         local function applyLines(t)
