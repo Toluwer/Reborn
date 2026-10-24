@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 
 local Reborn = {
-        Version = "0.9.5",
+        Version = "0.9.6",
         NotificationsEnabled = true,
         _windows = {},
         _huds = {},
@@ -4080,15 +4080,25 @@ function Reborn:CreateHUD(cfg)
         if cfg.Draggable ~= false then
                 card.InputBegan:Connect(function(input)
                         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                                local ap = card.AbsolutePosition
-                                dragState = { sx = input.Position.X, sy = input.Position.Y, ox = ap.X, oy = ap.Y }
+                                local cam = workspace.CurrentCamera
+                                local vp = cam and cam.ViewportSize or Vector2.new(1920, 1080)
+                                local p = card.Position
+                                local s = card.AbsoluteSize
+                                local a = card.AnchorPoint
                                 card.AnchorPoint = Vector2.new(0, 0)
-                                card.Position = UDim2.new(0, rnd(ap.X), 0, rnd(ap.Y))
+                                card.Position = UDim2.new(0, rnd(p.X.Offset + p.X.Scale * vp.X - a.X * s.X), 0, rnd(p.Y.Offset + p.Y.Scale * vp.Y - a.Y * s.Y))
+                                local q = card.Position
+                                dragState = { live = false, sx = 0, sy = 0, ox = q.X.Offset, oy = q.Y.Offset }
                                 lastPos = card.Position
                         end
                 end)
                 connect(UserInputService.InputChanged, function(input)
                         if dragState and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                                if not dragState.live then
+                                        dragState.live = true
+                                        dragState.sx = input.Position.X
+                                        dragState.sy = input.Position.Y
+                                end
                                 local cam = workspace.CurrentCamera
                                 local v = cam and cam.ViewportSize or Vector2.new(1920, 1080)
                                 local cw = card.AbsoluteSize.X
