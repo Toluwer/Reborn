@@ -2,7 +2,7 @@
 
 A dark, minimalist UI library for Roblox, implemented in a single Luau module.
 
-![version](https://img.shields.io/badge/version-v0.9.3-0070f3)
+![version](https://img.shields.io/badge/version-v0.9.7-0070f3)
 
 ## Features
 
@@ -86,7 +86,10 @@ A full example is available at [`examples/basic.luau`](examples/basic.luau).
 | `Reborn:Notify(config)` | Shows a toast. Accepts a table (`Title`, `Description`, `Type` (`"info" / "success" / "error"`), `Duration`) or a shorthand: `Notify("Title", "Description")`. |
 | `Reborn.NotificationsEnabled` | Set `false` to mute all toasts. |
 | `Reborn.Theme` | Default theme table. Pass overrides via `CreateWindow`. |
-| `Reborn:Destroy()` | Destroys all windows and HUDs and disconnects all input connections. |
+| `Reborn:Unload()` | Full teardown: destroys every window, every HUD and the shared toast layer, disconnects all input connections and clears the registries — nothing of the library keeps running. Idempotent. The window's Close button performs exactly this. |
+| `Reborn:Destroy()` | Alias of `Reborn:Unload()`. |
+
+`Reborn:Unload()` is a true unload, not just removing the UI: every `UserInputService` connection dies with it, so half-finished keybind captures and drags stop instantly, and every HUD goes down with the window instead of lingering on screen. Pending one-shot tweens and timers tick once against dead instances at most — they render nothing and create nothing (a debounce callback may still fire once, as in any UI library). A required module cannot evict itself from Roblox's require cache, but after `Unload` Reborn is fully inert: `CreateWindow` / `CreateHUD` / `Notify` start fresh, and once you drop your references to the returned objects the whole library is garbage-collected. Saved configs survive (they live in files or in memory, not in the UI).
 
 ### Window
 
@@ -139,7 +142,7 @@ A HUD is a self-contained overlay in its own ScreenGui — it lives outside the 
 | `hud:SetVisible(bool)` | Hides / shows the card, restoring the last dragged position. |
 | `hud:Destroy()` | Destroys the ScreenGui and disconnects the drag connections. |
 
-Multiple HUDs can coexist with each other and with windows (`Reborn:Destroy()` cleans up everything); each carries its own optional `Theme` override table and `Parent` like `CreateWindow` does.
+Multiple HUDs can coexist with each other and with windows (`Reborn:Unload()` / `Reborn:Destroy()` cleans up everything); each carries its own optional `Theme` override table and `Parent` like `CreateWindow` does.
 
 ### Icons
 

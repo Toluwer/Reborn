@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 
 local Reborn = {
-        Version = "0.9.6",
+        Version = "0.9.7",
         NotificationsEnabled = true,
         _windows = {},
         _huds = {},
@@ -1561,7 +1561,7 @@ function Reborn:CreateWindow(config)
                 local px, py = windowFrame.Position.X.Offset, windowFrame.Position.Y.Offset
                 tween(windowFrame, 0.18, { Position = UDim2.new(0, px, 0, py + 14) })
                 task.delay(0.2, function()
-                        if Window then pcall(function() Window:Destroy() end) end
+                        pcall(function() Reborn:Unload() end)
                 end)
         end
 
@@ -1580,6 +1580,7 @@ function Reborn:CreateWindow(config)
                                 Visible = false,
                                 Parent = windowFace,
                         })
+                        corner(scrim, GEO.WindowRadius - 1)
                         card = New("Frame", {
                                 AnchorPoint = Vector2.new(0.5, 0.5),
                                 Position = UDim2.new(0.5, 0, 0.5, 0),
@@ -4159,7 +4160,7 @@ function Reborn:CreateHUD(cfg)
         return hud
 end
 
-function Reborn:Destroy()
+function Reborn:Unload()
         for i = #self._huds, 1, -1 do
                 pcall(function() self._huds[i]:Destroy() end)
         end
@@ -4168,6 +4169,13 @@ function Reborn:Destroy()
                 pcall(function() self._windows[i]:Destroy() end)
         end
         self._windows = {}
+        if self._toastGui then
+                pcall(function() self._toastGui:Destroy() end)
+                self._toastGui = nil
+                self._toastLayer = nil
+        end
 end
+
+Reborn.Destroy = Reborn.Unload
 
 return Reborn
