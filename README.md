@@ -2,7 +2,7 @@
 
 A dark, minimalist UI library for Roblox, implemented in a single Luau module.
 
-![version](https://img.shields.io/badge/version-v0.9.7-0070f3)
+![version](https://img.shields.io/badge/version-v0.9.8-0070f3)
 
 ## Features
 
@@ -230,22 +230,22 @@ Any subset of keys may be overridden:
 Reborn:CreateWindow({
     Theme = {
         Accent = Color3.fromRGB(0, 112, 243),
-        Text = Color3.fromRGB(237, 237, 237),
+        Text = Color3.fromRGB(220, 220, 220),
     },
 })
 ```
 
 | Key | Value | Key | Value |
 | --- | --- | --- | --- |
-| `Background` | `#000000` | `Line` | `#262626` |
-| `Surface` | `#000000` | `LineStrong` | `#333333` |
-| `Overlay` | `#111111` | `Text` | `#ededed` |
-| `Chip` | `#1a1a1a` | `TextMuted` | `#a1a1a1` |
-| `RowHover` | `#1a1a1a` | `TextFaint` | `#888888` |
+| `Background` | `#0f0f0f` | `Line` | `#222222` |
+| `Surface` | `#0f0f0f` | `LineStrong` | `#282828` |
+| `Overlay` | `#171717` | `Text` | `#dcdcdc` |
+| `Chip` | `#1e1e1e` | `TextMuted` | `#9c9c9c` |
+| `RowHover` | `#1e1e1e` | `TextFaint` | `#848484` |
 | `OptionHover` | `#262626` | `Accent` | `#0070f3` |
 | `Success` | `#29d391` | `AccentHover` | `#3291ff` |
-| `Error` | `#ee0000` | `ToggleOff` | `#1f1f1f` |
-| `Handle` | `#ffffff` | | |
+| `Error` | `#e63c3c` | `ToggleOff` | `#212121` |
+| `Handle` | `#f0f0f0` | | |
 
 ## License
 

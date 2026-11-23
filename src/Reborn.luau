@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 
 local Reborn = {
-        Version = "0.9.7",
+        Version = "0.9.8",
         NotificationsEnabled = true,
         _windows = {},
         _huds = {},
@@ -13,23 +13,23 @@ local Reborn = {
 }
 
 local DEFAULT_THEME = {
-        Background   = Color3.fromRGB(0, 0, 0),
-        Surface      = Color3.fromRGB(0, 0, 0),
-        Overlay      = Color3.fromRGB(17, 17, 17),
-        Chip         = Color3.fromRGB(26, 26, 26),
-        RowHover     = Color3.fromRGB(26, 26, 26),
+        Background   = Color3.fromRGB(15, 15, 15),
+        Surface      = Color3.fromRGB(15, 15, 15),
+        Overlay      = Color3.fromRGB(23, 23, 23),
+        Chip         = Color3.fromRGB(30, 30, 30),
+        RowHover     = Color3.fromRGB(30, 30, 30),
         OptionHover  = Color3.fromRGB(38, 38, 38),
-        Line         = Color3.fromRGB(38, 38, 38),
-        LineStrong   = Color3.fromRGB(51, 51, 51),
-        Text         = Color3.fromRGB(237, 237, 237),
-        TextMuted    = Color3.fromRGB(161, 161, 161),
-        TextFaint    = Color3.fromRGB(136, 136, 136),
+        Line         = Color3.fromRGB(34, 34, 34),
+        LineStrong   = Color3.fromRGB(40, 40, 40),
+        Text         = Color3.fromRGB(220, 220, 220),
+        TextMuted    = Color3.fromRGB(156, 156, 156),
+        TextFaint    = Color3.fromRGB(132, 132, 132),
         Accent       = Color3.fromRGB(0, 112, 243),
         AccentHover  = Color3.fromRGB(50, 145, 255),
         Success      = Color3.fromRGB(41, 211, 145),
-        Error        = Color3.fromRGB(238, 0, 0),
-        ToggleOff    = Color3.fromRGB(31, 31, 31),
-        Handle       = Color3.fromRGB(255, 255, 255),
+        Error        = Color3.fromRGB(230, 60, 60),
+        ToggleOff    = Color3.fromRGB(33, 33, 33),
+        Handle       = Color3.fromRGB(240, 240, 240),
 }
 
 Reborn.Theme = DEFAULT_THEME
@@ -1683,8 +1683,8 @@ function Reborn:CreateWindow(config)
                                 tween(cbh, 0.12, { BackgroundColor3 = theme.Line })
                         end)
                         closeB.MouseEnter:Connect(function()
-                                tween(closeB, 0.12, { BackgroundColor3 = Color3.fromRGB(255, 51, 51) })
-                                tween(closeWrap, 0.12, { BackgroundColor3 = Color3.fromRGB(255, 51, 51) })
+                                tween(closeB, 0.12, { BackgroundColor3 = Color3.fromRGB(238, 80, 80) })
+                                tween(closeWrap, 0.12, { BackgroundColor3 = Color3.fromRGB(238, 80, 80) })
                         end)
                         closeB.MouseLeave:Connect(function()
                                 tween(closeB, 0.12, { BackgroundColor3 = theme.Error })
