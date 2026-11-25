@@ -216,8 +216,6 @@ Reborn:CreateWindow({
 | `Error` | `#e63c3c` | `ToggleOff` | `#2d2d2d` |
 | `Handle` | `#f4f4f4` | | |
 
-## License
-
-[MIT](LICENSE)
+## Credits
 
 Icons are from [Lucide](https://lucide.dev) (ISC License), rendered via the [lucide-roblox](https://github.com/latte-soft/lucide-roblox) sprite assets.

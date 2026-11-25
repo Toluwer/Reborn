@@ -1,7 +1,0 @@
-# Rojo / Studio artifacts
-sourcemap.json
-*.rbxl
-*.rbxlx
-*.rbxl.lock
-*.rbxlx.lock
-.DS_Store
