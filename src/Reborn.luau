@@ -983,16 +983,12 @@ local createWindow = (function()
                         padding(tabsHolder, 10, 10, 10, 10)
                         list(tabsHolder, 3)
 
-                        local content = New("ScrollingFrame", {
+                        local content = New("Frame", {
                                 Position = UDim2.new(0, GEO.Sidebar + 1, 0, 0),
                                 Size = UDim2.new(1, -(GEO.Sidebar + 1), 1, 0),
                                 BackgroundTransparency = 1,
                                 BorderSizePixel = 0,
-                                ScrollBarThickness = 8,
-                                ScrollBarImageColor3 = theme.LineStrong,
-                                ScrollingDirection = Enum.ScrollingDirection.Y,
-                                CanvasSize = UDim2.new(0, 0, 0, 0),
-                                AutomaticCanvasSize = Enum.AutomaticSize.Y,
+                                ClipsDescendants = true,
                                 Parent = bodyGroup,
                         })
 
@@ -1635,28 +1631,31 @@ local createWindow = (function()
                                 return el
                         end
 
-                        local lastCanvasY = 0
-                        content:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
-                                local cy = content.CanvasPosition.Y
-                                local d = cy - lastCanvasY
-                                lastCanvasY = cy
-                                if d == 0 then return end
-                                local wp = windowFrame.AbsolutePosition
-                                local wb = wp.Y + windowFrame.AbsoluteSize.Y
-                                local topMin = wp.Y + GEO.Header + 8
-                                for i = #state.openPops, 1, -1 do
-                                        local p = state.openPops[i]
-                                        local pos = p.pop.Position
-                                        local ny = pos.Y.Offset - d
-                                        local pb = ny + (p.popH or 0)
-                                        if pb < topMin + 4 or ny > wb - 12 then
-                                                p.close()
-                                        else
-                                                killTween(p.pop, "Position")
-                                                p.pop.Position = UDim2.new(0, pos.X.Offset, 0, ny)
+                        local function trackTabScroll(tab)
+                                local scroller = tab._scroller
+                                local lastCanvasY = scroller.CanvasPosition.Y
+                                connect(scroller:GetPropertyChangedSignal("CanvasPosition"), function()
+                                        local cy = scroller.CanvasPosition.Y
+                                        local d = cy - lastCanvasY
+                                        lastCanvasY = cy
+                                        if d == 0 or state.activeTab ~= tab then return end
+                                        local wp = windowFrame.AbsolutePosition
+                                        local wb = wp.Y + windowFrame.AbsoluteSize.Y
+                                        local topMin = wp.Y + GEO.Header + 8
+                                        for i = #state.openPops, 1, -1 do
+                                                local p = state.openPops[i]
+                                                local pos = p.pop.Position
+                                                local ny = pos.Y.Offset - d
+                                                local pb = ny + (p.popH or 0)
+                                                if pb < topMin + 4 or ny > wb - 12 then
+                                                        p.close()
+                                                else
+                                                        killTween(p.pop, "Position")
+                                                        p.pop.Position = UDim2.new(0, pos.X.Offset, 0, ny)
+                                                end
                                         end
-                                end
-                        end)
+                                end)
+                        end
                         dragZone.InputBegan:Connect(function() closeAllPops() end)
 
                         local confirmActive = false
@@ -1992,6 +1991,67 @@ local createWindow = (function()
                                 return section
                         end
 
+                        local tabGeneration = 0
+                        local function switchTab(tab)
+                                local previous = state.activeTab
+                                if tab == previous or state.closed or state.min then return end
+
+                                closeAllPops()
+                                tabGeneration = tabGeneration + 1
+                                local generation = tabGeneration
+                                local incoming = tab._scroller
+                                local outgoing = previous and previous._scroller
+                                local direction = previous and (tab._index > previous._index and 1 or -1) or 1
+                                local reversing = outgoing and incoming.Visible
+
+                                for _, other in ipairs(state.tabs) do
+                                        local scroller = other._scroller
+                                        killTween(scroller, "Position")
+                                        scroller.Interactable = false
+                                        scroller.ScrollingEnabled = false
+                                        if other ~= previous and other ~= tab then
+                                                scroller.Visible = false
+                                                other.Page.Visible = false
+                                                scroller.Position = UDim2.new(0, 0, 0, 0)
+                                        end
+                                end
+
+                                state.activeTab = tab
+                                if previous then previous._setActive(false) end
+                                tab._setActive(true)
+
+                                if not outgoing then
+                                        tab.Page.Visible = true
+                                        incoming.Position = UDim2.new(0, 0, 0, 0)
+                                        incoming.Visible = true
+                                        incoming.Interactable = true
+                                        incoming.ScrollingEnabled = true
+                                        return
+                                end
+
+                                if not reversing then
+                                        outgoing.Position = UDim2.new(0, 0, 0, 0)
+                                        incoming.Position = UDim2.new(direction, 0, 0, 0)
+                                        incoming.CanvasPosition = Vector2.new(0, 0)
+                                end
+
+                                tab.Page.Visible = true
+                                incoming.Visible = true
+                                outgoing.Visible = true
+
+                                local duration = reversing and math.max(0.12, 0.28 * math.abs(incoming.Position.X.Scale)) or 0.28
+                                tween(outgoing, duration, { Position = UDim2.new(-direction, 0, 0, 0) }, Enum.EasingStyle.Quart)
+                                local arrival = tween(incoming, duration, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Quart)
+                                arrival.Completed:Once(function(playback)
+                                        if playback ~= Enum.PlaybackState.Completed or generation ~= tabGeneration or not incoming.Parent then return end
+                                        outgoing.Visible = false
+                                        previous.Page.Visible = false
+                                        outgoing.Position = UDim2.new(0, 0, 0, 0)
+                                        incoming.Interactable = true
+                                        incoming.ScrollingEnabled = true
+                                end)
+                        end
+
                         local function addTab(name, iconName)
                                 local btn = New("TextButton", {
                                         Size = UDim2.new(1, 0, 0, GEO.TabH),
@@ -2017,12 +2077,27 @@ local createWindow = (function()
                                         padding(btn, 0, 12, 0, 12)
                                 end
 
+                                local scroller = New("ScrollingFrame", {
+                                        Size = UDim2.new(1, 0, 1, 0),
+                                        BackgroundTransparency = 1,
+                                        BorderSizePixel = 0,
+                                        ClipsDescendants = true,
+                                        ScrollBarThickness = 8,
+                                        ScrollBarImageColor3 = theme.LineStrong,
+                                        ScrollingDirection = Enum.ScrollingDirection.Y,
+                                        CanvasSize = UDim2.new(0, 0, 0, 0),
+                                        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+                                        ScrollingEnabled = false,
+                                        Interactable = false,
+                                        Visible = false,
+                                        Parent = content,
+                                })
                                 local page = New("Frame", {
                                         Size = UDim2.new(1, 0, 0, 0),
                                         AutomaticSize = Enum.AutomaticSize.Y,
                                         BackgroundTransparency = 1,
                                         Visible = false,
-                                        Parent = content,
+                                        Parent = scroller,
                                 })
                                 padding(page, GEO.ContentPadT, GEO.ContentPadS, GEO.ContentPadB, GEO.ContentPadS)
                                 local pageList = list(page, GEO.SectionGap)
@@ -2031,6 +2106,8 @@ local createWindow = (function()
                                         Name = name,
                                         Button = btn,
                                         Page = page,
+                                        _scroller = scroller,
+                                        _index = #state.tabs + 1,
                                         Columns = nil,
                                         _nextCol = 1,
                                         _pageList = pageList,
@@ -2043,31 +2120,21 @@ local createWindow = (function()
                                         btn.FontFace = active and F.Semibold or F.Medium
                                 end
                                 btn.MouseEnter:Connect(function()
-                                        if not page.Visible then
+                                        if state.activeTab ~= tab then
                                                 tween(btn, 0.12, { BackgroundTransparency = 0 })
                                                 tween(btn, 0.12, { TextColor3 = theme.Text })
                                                 if ic then tween(ic, 0.12, { ImageColor3 = theme.Text }) end
                                         end
                                 end)
                                 btn.MouseLeave:Connect(function()
-                                        if not page.Visible then
+                                        if state.activeTab ~= tab then
                                                 tween(btn, 0.12, { BackgroundTransparency = 1 })
                                                 tween(btn, 0.12, { TextColor3 = theme.TextMuted })
                                                 if ic then tween(ic, 0.12, { ImageColor3 = theme.TextMuted }) end
                                         end
                                 end)
                                 btn.Activated:Connect(function()
-                                        closeAllPops()
-                                        for _, t in ipairs(state.tabs) do
-                                                t.Page.Visible = (t == tab)
-                                                t._setActive(false)
-                                        end
-                                        tab._setActive(true)
-                                        page.Visible = true
-                                        killTween(page, "Position")
-                                        page.Position = UDim2.new(0, 8, 0, 0)
-                                        tween(page, 0.16, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Quint)
-                                        content.CanvasPosition = Vector2.new(0, 0)
+                                        switchTab(tab)
                                 end)
                                 tab._setActive = setActive
 
@@ -2108,8 +2175,13 @@ local createWindow = (function()
                                 end
 
                                 table.insert(state.tabs, tab)
+                                trackTabScroll(tab)
                                 if #state.tabs == 1 then
+                                        state.activeTab = tab
                                         page.Visible = true
+                                        scroller.Visible = true
+                                        scroller.Interactable = true
+                                        scroller.ScrollingEnabled = true
                                         setActive(true)
                                 end
                                 return tab
