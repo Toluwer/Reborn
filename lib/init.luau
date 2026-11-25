@@ -7,6 +7,7 @@ local attachConfig = require(script.Config)
 local createNavigation = require(script.Navigation)
 local createPopovers = require(script.Popovers)
 local createLifecycle = require(script.Lifecycle)
+local createInput = require(script.InputRouter)
 
 local Components = {
     Toggle = require(script.Components.Toggle),
@@ -33,7 +34,7 @@ Reborn.Theme = Theme.Default
 local Core = createCore(Theme)
 local Icons = createIcons(Core)
 local Notifications = createNotifications(Reborn, Core, Theme, Icons)
-createWindow(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle)
+createWindow(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle, createInput)
 
 function Reborn:Unload()
     for i = #self._windows, 1, -1 do

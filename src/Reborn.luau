@@ -969,6 +969,7 @@ local createNavigation = (function()
             local previous = state.activeTab
             if tab == previous or state.closed or state.min or state.destroyed then return end
 
+            context.input.Cancel()
             closeAllPops()
             tabGeneration = tabGeneration + 1
             local generation = tabGeneration
@@ -1285,7 +1286,7 @@ local createPopovers = (function()
 end)()
 
 local createLifecycle = (function()
-    return function(state, popovers)
+    return function(state, popovers, inputRouter)
         local entries = state.elements
         local searchRows = state.searchRows
         local byRow = {}
@@ -1413,6 +1414,7 @@ local createLifecycle = (function()
             entry.disabled = true
 
             local row = entry.row
+            inputRouter.Cancel(row)
             disconnect(row)
 
             if entry.kind == "Keybind" then
@@ -1474,6 +1476,7 @@ local createLifecycle = (function()
                 local disabled = not value
                 if entry.destroyed or state.destroyed or entry.disabled == disabled then return end
                 entry.disabled = disabled
+                if disabled then inputRouter.Cancel(row) end
                 if setEnabled then setEnabled(not disabled) end
             end
 
@@ -1481,10 +1484,14 @@ local createLifecycle = (function()
                 if entry.destroyed or state.destroyed then return end
                 entry.hidden = not value
                 if not value then
+                    inputRouter.Cancel(row)
                     closeElementPopup(entry)
                     if kind == "Row" then
                         for _, child in ipairs(entries) do
-                            if child.row.Parent == row then closeElementPopup(child) end
+                            if child.row.Parent == row then
+                                inputRouter.Cancel(child.row)
+                                closeElementPopup(child)
+                            end
                         end
                     end
                 end
@@ -1544,8 +1551,96 @@ local createLifecycle = (function()
     end
 end)()
 
+local createInput = (function()
+    return function(UserInputService, connect)
+        local capture = nil
+        local beganHandlers = {}
+        local endedHandlers = {}
+        local mouseButton = Enum.UserInputType.MouseButton1
+        local mouseMovement = Enum.UserInputType.MouseMovement
+        local touch = Enum.UserInputType.Touch
+
+        local function isPointer(input)
+            return input.UserInputType == mouseButton or input.UserInputType == touch
+        end
+
+        local function cancel(owner)
+            if not capture or (owner and capture.owner ~= owner) then return end
+            local previous = capture
+            capture = nil
+            if previous.finished then previous.finished() end
+        end
+
+        local function begin(owner, input, moved, finished)
+            if not isPointer(input) or capture then return false end
+            capture = {
+                owner = owner,
+                input = input,
+                mouse = input.UserInputType == mouseButton,
+                moved = moved,
+                finished = finished,
+            }
+            return true
+        end
+
+        local function onBegan(callback)
+            table.insert(beganHandlers, callback)
+        end
+
+        local function onEnded(callback)
+            table.insert(endedHandlers, callback)
+        end
+
+        connect(UserInputService.InputBegan, function(input, processed)
+            for _, callback in ipairs(beganHandlers) do
+                callback(input, processed)
+            end
+        end)
+
+        connect(UserInputService.InputChanged, function(input)
+            local current = capture
+            if not current then return end
+            if current.mouse then
+                if input.UserInputType ~= mouseMovement then return end
+            elseif input ~= current.input then
+                return
+            end
+            current.moved(input)
+        end)
+
+        connect(UserInputService.InputEnded, function(input, processed)
+            local current = capture
+            if current and (input == current.input or (current.mouse and input.UserInputType == mouseButton)) then
+                cancel()
+            end
+            for _, callback in ipairs(endedHandlers) do
+                callback(input, processed)
+            end
+        end)
+
+        connect(UserInputService.WindowFocusReleased, function()
+            cancel()
+        end)
+
+        local function destroy()
+            cancel()
+            table.clear(beganHandlers)
+            table.clear(endedHandlers)
+        end
+
+        return {
+            Begin = begin,
+            Cancel = cancel,
+            IsPointer = isPointer,
+            OnBegan = onBegan,
+            OnEnded = onEnded,
+            Destroy = destroy,
+        }
+    end
+end)()
+
 local createWindow = (function()
-    return function(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle)
+    return function(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle, createInput)
         local DEFAULT_THEME = Theme.Default
         local F = Theme.Fonts
         local GEO = Theme.Geometry
@@ -1614,6 +1709,8 @@ local createWindow = (function()
                 table.insert(conns, connection)
                 return connection
             end
+
+            local inputRouter = createInput(UserInputService, connect)
 
             local camera = workspace.CurrentCamera or workspace:FindFirstChildOfClass("Camera")
             local function viewportSize()
@@ -1937,34 +2034,25 @@ local createWindow = (function()
 
             local toastLayer = buildToastLayer(gui, theme)
 
-            local dragState = nil
             dragZone.InputBegan:Connect(function(input)
-                if state.closed then return end
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    state.dragged = true
+                if state.closed or state.min or not inputRouter.IsPointer(input) then return end
+                local start = input.Position
+                local origin = windowFrame.Position
+                if not inputRouter.Begin(windowFrame, input, function(movement)
                     killTween(windowFrame, "Position")
-                    local p = windowFrame.Position
-                    dragState = { sx = input.Position.X, sy = input.Position.Y, ox = p.X.Offset, oy = p.Y.Offset }
-                end
-            end)
-            connect(UserInputService.InputChanged, function(input)
-                if dragState and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                    killTween(windowFrame, "Position")
-                    local v = viewportSize()
-                    local nx = clamp(dragState.ox + (input.Position.X - dragState.sx), -W + 140, v.X - 140)
-                    local ny = clamp(dragState.oy + (input.Position.Y - dragState.sy), 0, v.Y - GEO.Header)
-                    windowFrame.Position = UDim2.new(0, rnd(nx), 0, rnd(ny))
-                end
-            end)
-            connect(UserInputService.InputEnded, function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    dragState = nil
-                end
+                    local viewport = viewportSize()
+                    local delta = movement.Position - start
+                    local x = clamp(origin.X.Offset + delta.X, -W + 140, viewport.X - 140)
+                    local y = clamp(origin.Y.Offset + delta.Y, 0, viewport.Y - GEO.Header)
+                    windowFrame.Position = UDim2.new(0, rnd(x), 0, rnd(y))
+                end) then return end
+                state.dragged = true
+                killTween(windowFrame, "Position")
             end)
 
             local popovers = createPopovers(Core, Theme, state, gui, windowFrame, connect)
             local closeAllPops = popovers.CloseAll
-            local lifecycle = createLifecycle(state, popovers)
+            local lifecycle = createLifecycle(state, popovers, inputRouter)
             local closeSearch
 
             local grip = New("TextButton", {
@@ -1985,31 +2073,21 @@ local createWindow = (function()
             grip.MouseLeave:Connect(function()
                 tween(gripIcon, 0.12, { ImageColor3 = theme.TextFaint })
             end)
-            local resizeState = nil
             grip.InputBegan:Connect(function(input)
-                if state.closed then return end
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    closeAllPops()
-                    killTween(windowFrame, "Size")
-                    resizeState = { sx = input.Position.X, sy = input.Position.Y, w = W, h = H }
-                end
-            end)
-            connect(UserInputService.InputChanged, function(input)
-                if resizeState and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                    local v = viewportSize()
-                    local maxX = v.X * 0.96
-                    local minX = math.min(540, maxX)
-                    local maxY = v.Y * 0.88
-                    local minY = math.min(360, maxY)
-                    W = math.floor(clamp(resizeState.w + (input.Position.X - resizeState.sx), minX, maxX) / 2) * 2
-                    H = math.floor(clamp(resizeState.h + (input.Position.Y - resizeState.sy), minY, maxY) / 2) * 2
+                if state.closed or state.min or not inputRouter.IsPointer(input) then return end
+                local start = input.Position
+                local width, height = W, H
+                if not inputRouter.Begin(grip, input, function(movement)
+                    local viewport = viewportSize()
+                    local delta = movement.Position - start
+                    local maxWidth, maxHeight = viewport.X * 0.96, viewport.Y * 0.88
+                    local minWidth, minHeight = math.min(540, maxWidth), math.min(360, maxHeight)
+                    W = math.floor(clamp(width + delta.X, minWidth, maxWidth) / 2) * 2
+                    H = math.floor(clamp(height + delta.Y, minHeight, maxHeight) / 2) * 2
                     windowFrame.Size = UDim2.new(0, W, 0, H)
-                end
-            end)
-            connect(UserInputService.InputEnded, function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    resizeState = nil
-                end
+                end) then return end
+                closeAllPops()
+                killTween(windowFrame, "Size")
             end)
 
             local function setMinimized(m)
@@ -2017,6 +2095,7 @@ local createWindow = (function()
                 if m and state.closed then return end
                 state.min = m
                 if m then
+                    inputRouter.Cancel()
                     closeAllPops()
                     if searchWrap.Size.X.Offset > 0 then closeSearch() end
                     grip.Visible = false
@@ -2076,8 +2155,7 @@ local createWindow = (function()
             local function closeWindow()
                 if state.closed then return end
                 state.closed = true
-                dragState = nil
-                resizeState = nil
+                inputRouter.Cancel()
                 closeAllPops()
                 if state.min then
                     state.min = false
@@ -2141,7 +2219,7 @@ local createWindow = (function()
                     end)
                 end
             end)
-            connect(UserInputService.InputEnded, function(input)
+            inputRouter.OnEnded(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     pillHoldGen = pillHoldGen + 1
                 end
@@ -2204,7 +2282,7 @@ local createWindow = (function()
                     searchLostDuringPress = false
                 end
             end)
-            connect(UserInputService.InputEnded, function(input)
+            inputRouter.OnEnded(function(input)
                 if searchPress ~= input then return end
                 task.defer(function()
                     if searchPress ~= input then return end
@@ -2557,6 +2635,7 @@ local createWindow = (function()
                 New = New,
                 TweenService = TweenService,
                 UserInputService = UserInputService,
+                input = inputRouter,
                 clamp = clamp,
                 closeAllPops = closeAllPops,
                 colorToHex = colorToHex,
@@ -2601,7 +2680,7 @@ local createWindow = (function()
 
             local addTab = createNavigation(context, tabsHolder, content, popovers)
 
-            connect(UserInputService.InputBegan, function(input, gameProcessed)
+            inputRouter.OnBegan(function(input, gameProcessed)
                 if state.listening and input.UserInputType == Enum.UserInputType.Keyboard then
                     if input.KeyCode == Enum.KeyCode.Escape then
                         state.listening._cancel()
@@ -2648,7 +2727,7 @@ local createWindow = (function()
                     end
                 end
             end)
-            connect(UserInputService.InputEnded, function(input, gameProcessed)
+            inputRouter.OnEnded(function(input, gameProcessed)
                 for _, kb in ipairs(state.keybinds) do
                     if kb.Mode == "Hold" and kb.Active and kb.Callback then
                         local matched = false
@@ -2717,6 +2796,7 @@ local createWindow = (function()
                 state.closed = true
                 state.min = false
                 tipState.gen = tipState.gen + 1
+                inputRouter.Destroy()
                 for _, connection in ipairs(conns) do
                     connection:Disconnect()
                 end
@@ -2851,7 +2931,7 @@ end)()
 
 Components.Slider = (function()
     return function(ctx)
-        local UserInputService = ctx.UserInputService
+        local inputRouter = ctx.input
         local rnd = ctx.rnd
         local clamp = ctx.clamp
         local toWidth = ctx.toWidth
@@ -2861,7 +2941,6 @@ Components.Slider = (function()
         local theme = ctx.theme
         local GEO = ctx.GEO
         local F = ctx.F
-        local connect = ctx.connect
         local makeRow = ctx.makeRow
         local setRowDim = ctx.setRowDim
         local registerSearch = ctx.registerSearch
@@ -2966,7 +3045,6 @@ Components.Slider = (function()
             track:GetPropertyChangedSignal("AbsoluteSize"):Connect(render)
             render()
 
-            local dragging = false
             local disabled = false
             local function fromX(x)
                 local tw = track.AbsoluteSize.X
@@ -2980,19 +3058,10 @@ Components.Slider = (function()
             end
             track.InputBegan:Connect(function(input)
                 if disabled then return end
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    dragging = true
+                if inputRouter.Begin(row, input, function(movement)
+                    fromX(movement.Position.X)
+                end) then
                     fromX(input.Position.X)
-                end
-            end)
-            connect(row, UserInputService.InputChanged, function(input)
-                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                    fromX(input.Position.X)
-                end
-            end)
-            connect(row, UserInputService.InputEnded, function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    dragging = false
                 end
             end)
             registerSearch(row, cfg.Text, section)
@@ -3016,7 +3085,7 @@ Components.Slider = (function()
             end
             local function setEnabled(v)
                 disabled = not v
-                if disabled then dragging = false end
+                if disabled then inputRouter.Cancel(row) end
                 setRowDim(row, face, disabled)
                 lblTop.TextTransparency = disabled and 0.5 or 0
                 val.TextTransparency = disabled and 0.5 or 0
@@ -3562,7 +3631,7 @@ end)()
 
 Components.ColorPicker = (function()
     return function(ctx)
-        local UserInputService = ctx.UserInputService
+        local inputRouter = ctx.input
         local rnd = ctx.rnd
         local clamp = ctx.clamp
         local toWidth = ctx.toWidth
@@ -3576,7 +3645,6 @@ Components.ColorPicker = (function()
         local theme = ctx.theme
         local GEO = ctx.GEO
         local F = ctx.F
-        local connect = ctx.connect
         local closeAllPops = ctx.closeAllPops
         local registerPop = ctx.registerPop
         local unregisterPop = ctx.unregisterPop
@@ -3819,13 +3887,11 @@ Components.ColorPicker = (function()
                 if fire and cfg.Callback then cfg.Callback(hex, color) end
             end
 
-            local active = nil
             local open = false
             local function bindPad(el, apply)
                 el.InputBegan:Connect(function(input)
                     if not open then return end
-                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                        active = apply
+                    if inputRouter.Begin(row, input, apply) then
                         apply(input)
                     end
                 end)
@@ -3843,16 +3909,6 @@ Components.ColorPicker = (function()
                 h = clamp((input.Position.Y - r.Y) / sz.Y, 0, 1)
                 render(true)
             end
-            connect(row, UserInputService.InputChanged, function(input)
-                if active and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                    active(input)
-                end
-            end)
-            connect(row, UserInputService.InputEnded, function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    active = nil
-                end
-            end)
             bindPad(sv, applySV)
             bindPad(hue, applyHue)
 
@@ -3876,7 +3932,7 @@ Components.ColorPicker = (function()
                     tween(pop, 0.18, { GroupTransparency = 0 }, Enum.EasingStyle.Sine)
                     registerPop(row, pop, setOpen, cappedH, GEO.PopW, true)
                 else
-                    active = nil
+                    inputRouter.Cancel(row)
                     unregisterPop(pop)
                     local pos = pop.Position
                     tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + direction * 4) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
@@ -4708,7 +4764,7 @@ Reborn.Theme = Theme.Default
 local Core = createCore(Theme)
 local Icons = createIcons(Core)
 local Notifications = createNotifications(Reborn, Core, Theme, Icons)
-createWindow(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle)
+createWindow(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle, createInput)
 
 function Reborn:Unload()
     for i = #self._windows, 1, -1 do

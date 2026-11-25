@@ -1,4 +1,4 @@
-return function(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle)
+return function(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle, createInput)
     local DEFAULT_THEME = Theme.Default
     local F = Theme.Fonts
     local GEO = Theme.Geometry
@@ -67,6 +67,8 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             table.insert(conns, connection)
             return connection
         end
+
+        local inputRouter = createInput(UserInputService, connect)
 
         local camera = workspace.CurrentCamera or workspace:FindFirstChildOfClass("Camera")
         local function viewportSize()
@@ -390,34 +392,25 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
 
         local toastLayer = buildToastLayer(gui, theme)
 
-        local dragState = nil
         dragZone.InputBegan:Connect(function(input)
-            if state.closed then return end
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                state.dragged = true
+            if state.closed or state.min or not inputRouter.IsPointer(input) then return end
+            local start = input.Position
+            local origin = windowFrame.Position
+            if not inputRouter.Begin(windowFrame, input, function(movement)
                 killTween(windowFrame, "Position")
-                local p = windowFrame.Position
-                dragState = { sx = input.Position.X, sy = input.Position.Y, ox = p.X.Offset, oy = p.Y.Offset }
-            end
-        end)
-        connect(UserInputService.InputChanged, function(input)
-            if dragState and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                killTween(windowFrame, "Position")
-                local v = viewportSize()
-                local nx = clamp(dragState.ox + (input.Position.X - dragState.sx), -W + 140, v.X - 140)
-                local ny = clamp(dragState.oy + (input.Position.Y - dragState.sy), 0, v.Y - GEO.Header)
-                windowFrame.Position = UDim2.new(0, rnd(nx), 0, rnd(ny))
-            end
-        end)
-        connect(UserInputService.InputEnded, function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                dragState = nil
-            end
+                local viewport = viewportSize()
+                local delta = movement.Position - start
+                local x = clamp(origin.X.Offset + delta.X, -W + 140, viewport.X - 140)
+                local y = clamp(origin.Y.Offset + delta.Y, 0, viewport.Y - GEO.Header)
+                windowFrame.Position = UDim2.new(0, rnd(x), 0, rnd(y))
+            end) then return end
+            state.dragged = true
+            killTween(windowFrame, "Position")
         end)
 
         local popovers = createPopovers(Core, Theme, state, gui, windowFrame, connect)
         local closeAllPops = popovers.CloseAll
-        local lifecycle = createLifecycle(state, popovers)
+        local lifecycle = createLifecycle(state, popovers, inputRouter)
         local closeSearch
 
         local grip = New("TextButton", {
@@ -438,31 +431,21 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
         grip.MouseLeave:Connect(function()
             tween(gripIcon, 0.12, { ImageColor3 = theme.TextFaint })
         end)
-        local resizeState = nil
         grip.InputBegan:Connect(function(input)
-            if state.closed then return end
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                closeAllPops()
-                killTween(windowFrame, "Size")
-                resizeState = { sx = input.Position.X, sy = input.Position.Y, w = W, h = H }
-            end
-        end)
-        connect(UserInputService.InputChanged, function(input)
-            if resizeState and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                local v = viewportSize()
-                local maxX = v.X * 0.96
-                local minX = math.min(540, maxX)
-                local maxY = v.Y * 0.88
-                local minY = math.min(360, maxY)
-                W = math.floor(clamp(resizeState.w + (input.Position.X - resizeState.sx), minX, maxX) / 2) * 2
-                H = math.floor(clamp(resizeState.h + (input.Position.Y - resizeState.sy), minY, maxY) / 2) * 2
+            if state.closed or state.min or not inputRouter.IsPointer(input) then return end
+            local start = input.Position
+            local width, height = W, H
+            if not inputRouter.Begin(grip, input, function(movement)
+                local viewport = viewportSize()
+                local delta = movement.Position - start
+                local maxWidth, maxHeight = viewport.X * 0.96, viewport.Y * 0.88
+                local minWidth, minHeight = math.min(540, maxWidth), math.min(360, maxHeight)
+                W = math.floor(clamp(width + delta.X, minWidth, maxWidth) / 2) * 2
+                H = math.floor(clamp(height + delta.Y, minHeight, maxHeight) / 2) * 2
                 windowFrame.Size = UDim2.new(0, W, 0, H)
-            end
-        end)
-        connect(UserInputService.InputEnded, function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                resizeState = nil
-            end
+            end) then return end
+            closeAllPops()
+            killTween(windowFrame, "Size")
         end)
 
         local function setMinimized(m)
@@ -470,6 +453,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             if m and state.closed then return end
             state.min = m
             if m then
+                inputRouter.Cancel()
                 closeAllPops()
                 if searchWrap.Size.X.Offset > 0 then closeSearch() end
                 grip.Visible = false
@@ -529,8 +513,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
         local function closeWindow()
             if state.closed then return end
             state.closed = true
-            dragState = nil
-            resizeState = nil
+            inputRouter.Cancel()
             closeAllPops()
             if state.min then
                 state.min = false
@@ -594,7 +577,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
                 end)
             end
         end)
-        connect(UserInputService.InputEnded, function(input)
+        inputRouter.OnEnded(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                 pillHoldGen = pillHoldGen + 1
             end
@@ -657,7 +640,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
                 searchLostDuringPress = false
             end
         end)
-        connect(UserInputService.InputEnded, function(input)
+        inputRouter.OnEnded(function(input)
             if searchPress ~= input then return end
             task.defer(function()
                 if searchPress ~= input then return end
@@ -1010,6 +993,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             New = New,
             TweenService = TweenService,
             UserInputService = UserInputService,
+            input = inputRouter,
             clamp = clamp,
             closeAllPops = closeAllPops,
             colorToHex = colorToHex,
@@ -1054,7 +1038,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
 
         local addTab = createNavigation(context, tabsHolder, content, popovers)
 
-        connect(UserInputService.InputBegan, function(input, gameProcessed)
+        inputRouter.OnBegan(function(input, gameProcessed)
             if state.listening and input.UserInputType == Enum.UserInputType.Keyboard then
                 if input.KeyCode == Enum.KeyCode.Escape then
                     state.listening._cancel()
@@ -1101,7 +1085,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
                 end
             end
         end)
-        connect(UserInputService.InputEnded, function(input, gameProcessed)
+        inputRouter.OnEnded(function(input, gameProcessed)
             for _, kb in ipairs(state.keybinds) do
                 if kb.Mode == "Hold" and kb.Active and kb.Callback then
                     local matched = false
@@ -1170,6 +1154,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             state.closed = true
             state.min = false
             tipState.gen = tipState.gen + 1
+            inputRouter.Destroy()
             for _, connection in ipairs(conns) do
                 connection:Disconnect()
             end

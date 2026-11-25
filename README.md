@@ -38,6 +38,7 @@ Create a ModuleScript named `Reborn` and paste `src/Reborn.luau` into it. For de
 - `lib/Window.luau`, `lib/Notifications.luau`, `lib/Config.luau` — window lifecycle, notifications and configuration
 - `lib/Navigation.luau`, `lib/Popovers.luau` — tab and section layout, page transitions, and popup management
 - `lib/Lifecycle.luau` — component ownership, connections, visibility, search and callback guards
+- `lib/InputRouter.luau` — shared input dispatch and pointer capture
 - `lib/Components/` — individual components
 - `src/Reborn.luau` — standalone distribution, kept compatible with the existing URL
 - `examples/basic.luau` — usage example

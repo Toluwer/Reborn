@@ -1,5 +1,5 @@
 return function(ctx)
-    local UserInputService = ctx.UserInputService
+    local inputRouter = ctx.input
     local rnd = ctx.rnd
     local clamp = ctx.clamp
     local toWidth = ctx.toWidth
@@ -13,7 +13,6 @@ return function(ctx)
     local theme = ctx.theme
     local GEO = ctx.GEO
     local F = ctx.F
-    local connect = ctx.connect
     local closeAllPops = ctx.closeAllPops
     local registerPop = ctx.registerPop
     local unregisterPop = ctx.unregisterPop
@@ -256,13 +255,11 @@ return function(ctx)
             if fire and cfg.Callback then cfg.Callback(hex, color) end
         end
 
-        local active = nil
         local open = false
         local function bindPad(el, apply)
             el.InputBegan:Connect(function(input)
                 if not open then return end
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    active = apply
+                if inputRouter.Begin(row, input, apply) then
                     apply(input)
                 end
             end)
@@ -280,16 +277,6 @@ return function(ctx)
             h = clamp((input.Position.Y - r.Y) / sz.Y, 0, 1)
             render(true)
         end
-        connect(row, UserInputService.InputChanged, function(input)
-            if active and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                active(input)
-            end
-        end)
-        connect(row, UserInputService.InputEnded, function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                active = nil
-            end
-        end)
         bindPad(sv, applySV)
         bindPad(hue, applyHue)
 
@@ -313,7 +300,7 @@ return function(ctx)
                 tween(pop, 0.18, { GroupTransparency = 0 }, Enum.EasingStyle.Sine)
                 registerPop(row, pop, setOpen, cappedH, GEO.PopW, true)
             else
-                active = nil
+                inputRouter.Cancel(row)
                 unregisterPop(pop)
                 local pos = pop.Position
                 tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + direction * 4) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)

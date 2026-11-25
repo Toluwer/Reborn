@@ -1,5 +1,5 @@
 return function(ctx)
-    local UserInputService = ctx.UserInputService
+    local inputRouter = ctx.input
     local rnd = ctx.rnd
     local clamp = ctx.clamp
     local toWidth = ctx.toWidth
@@ -9,7 +9,6 @@ return function(ctx)
     local theme = ctx.theme
     local GEO = ctx.GEO
     local F = ctx.F
-    local connect = ctx.connect
     local makeRow = ctx.makeRow
     local setRowDim = ctx.setRowDim
     local registerSearch = ctx.registerSearch
@@ -114,7 +113,6 @@ return function(ctx)
         track:GetPropertyChangedSignal("AbsoluteSize"):Connect(render)
         render()
 
-        local dragging = false
         local disabled = false
         local function fromX(x)
             local tw = track.AbsoluteSize.X
@@ -128,19 +126,10 @@ return function(ctx)
         end
         track.InputBegan:Connect(function(input)
             if disabled then return end
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                dragging = true
+            if inputRouter.Begin(row, input, function(movement)
+                fromX(movement.Position.X)
+            end) then
                 fromX(input.Position.X)
-            end
-        end)
-        connect(row, UserInputService.InputChanged, function(input)
-            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                fromX(input.Position.X)
-            end
-        end)
-        connect(row, UserInputService.InputEnded, function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                dragging = false
             end
         end)
         registerSearch(row, cfg.Text, section)
@@ -164,7 +153,7 @@ return function(ctx)
         end
         local function setEnabled(v)
             disabled = not v
-            if disabled then dragging = false end
+            if disabled then inputRouter.Cancel(row) end
             setRowDim(row, face, disabled)
             lblTop.TextTransparency = disabled and 0.5 or 0
             val.TextTransparency = disabled and 0.5 or 0

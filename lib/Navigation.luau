@@ -122,6 +122,7 @@ return function(context, tabsHolder, content, popovers)
         local previous = state.activeTab
         if tab == previous or state.closed or state.min or state.destroyed then return end
 
+        context.input.Cancel()
         closeAllPops()
         tabGeneration = tabGeneration + 1
         local generation = tabGeneration

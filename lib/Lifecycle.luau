@@ -1,4 +1,4 @@
-return function(state, popovers)
+return function(state, popovers, inputRouter)
     local entries = state.elements
     local searchRows = state.searchRows
     local byRow = {}
@@ -126,6 +126,7 @@ return function(state, popovers)
         entry.disabled = true
 
         local row = entry.row
+        inputRouter.Cancel(row)
         disconnect(row)
 
         if entry.kind == "Keybind" then
@@ -187,6 +188,7 @@ return function(state, popovers)
             local disabled = not value
             if entry.destroyed or state.destroyed or entry.disabled == disabled then return end
             entry.disabled = disabled
+            if disabled then inputRouter.Cancel(row) end
             if setEnabled then setEnabled(not disabled) end
         end
 
@@ -194,10 +196,14 @@ return function(state, popovers)
             if entry.destroyed or state.destroyed then return end
             entry.hidden = not value
             if not value then
+                inputRouter.Cancel(row)
                 closeElementPopup(entry)
                 if kind == "Row" then
                     for _, child in ipairs(entries) do
-                        if child.row.Parent == row then closeElementPopup(child) end
+                        if child.row.Parent == row then
+                            inputRouter.Cancel(child.row)
+                            closeElementPopup(child)
+                        end
                     end
                 end
             end
