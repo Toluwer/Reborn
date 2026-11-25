@@ -3982,7 +3982,6 @@ Components.List = (function()
                         end
                         local function applySel(rec, on)
                                 rec._sel = on
-                                rec.bar.Visible = on
                                 rec.frame.BackgroundColor3 = theme.Accent
                                 rec.frame.BackgroundTransparency = on and 0.85 or 1
                                 rec.primary.TextColor3 = on and theme.Text or theme.TextMuted
@@ -4016,17 +4015,6 @@ Components.List = (function()
                                 })
                                 nextOrder = nextOrder + 1
                                 corner(ob, 6)
-                                local bar = New("Frame", {
-                                        AnchorPoint = Vector2.new(0, 0.5),
-                                        Position = UDim2.new(0, 5, 0.5, 0),
-                                        Size = UDim2.new(0, 3, 0, ih - 12),
-                                        BackgroundColor3 = theme.Accent,
-                                        BorderSizePixel = 0,
-                                        Visible = false,
-                                        ZIndex = 2,
-                                        Parent = ob,
-                                })
-                                corner(bar, 2)
                                 local ic = nil
                                 if item.Icon ~= nil then
                                         ic = icon(ob, tostring(item.Icon), 16, theme.TextMuted)
@@ -4114,7 +4102,7 @@ Components.List = (function()
                                         if lstDisabled then return end
                                         selectRec(rec, true)
                                 end)
-                                rec = { frame = ob, bar = bar, primary = prim, item = item, h = ih }
+                                rec = { frame = ob, primary = prim, item = item, h = ih }
                                 table.insert(items, rec)
                                 sumH = sumH + ih
                                 fitHeight()
