@@ -788,7 +788,6 @@ local createWindow = (function()
                                 Parent = gui,
                         })
                         local winCorner = corner(windowFrame, GEO.WindowRadius)
-                        local closeScale = New("UIScale", { Scale = 1, Parent = windowFrame })
                         local windowFace = New("Frame", {
                                 Position = UDim2.new(0, 1, 0, 1),
                                 Size = UDim2.new(1, -2, 1, -2),
@@ -1073,6 +1072,7 @@ local createWindow = (function()
 
                         local dragState = nil
                         dragZone.InputBegan:Connect(function(input)
+                                if state.closed then return end
                                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                                         state.dragged = true
                                         killTween(windowFrame, "Position")
@@ -1117,6 +1117,7 @@ local createWindow = (function()
                         end)
                         local resizeState = nil
                         grip.InputBegan:Connect(function(input)
+                                if state.closed then return end
                                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                                         closeAllPops()
                                         killTween(windowFrame, "Size")
@@ -1205,6 +1206,8 @@ local createWindow = (function()
                         local function closeWindow()
                                 if state.closed then return end
                                 state.closed = true
+                                dragState = nil
+                                resizeState = nil
                                 closeAllPops()
                                 if state.min then
                                         state.min = false
@@ -1229,15 +1232,17 @@ local createWindow = (function()
                                 end
                                 killTween(windowFrame, "Position")
                                 killTween(windowFrame, "Size")
-                                local px, py = windowFrame.Position.X.Offset, windowFrame.Position.Y.Offset
-                                state.closePos = Vector2.new(px, py)
                                 state.closeGeneration = (state.closeGeneration or 0) + 1
                                 local generation = state.closeGeneration
-                                tween(closeScale, 0.23, { Scale = 0.97 }, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
-                                tween(windowFrame, 0.23, { Position = UDim2.new(0, px + rnd(W * 0.015), 0, py + rnd(H * 0.015) + 5) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-                                tween(windowFrame, 0.23, { GroupTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-                                task.delay(0.24, function()
-                                        if state.closed and state.closeGeneration == generation and windowFrame.Parent then windowFrame.Visible = false end
+                                if not windowFrame.Visible then
+                                        windowFrame.GroupTransparency = 1
+                                        return
+                                end
+                                local exit = tween(windowFrame, 0.20, { GroupTransparency = 1 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+                                exit.Completed:Once(function(playback)
+                                        if playback == Enum.PlaybackState.Completed and state.closed and state.closeGeneration == generation and windowFrame.Parent then
+                                                windowFrame.Visible = false
+                                        end
                                 end)
                         end
 
@@ -1278,19 +1283,14 @@ local createWindow = (function()
                         end)
 
                         local function reopen()
-                                if not state.closed then return end
+                                if not state.closed or state.unloading then return end
                                 state.closed = false
                                 if state.min then setMinimized(false) end
                                 closeAllPops()
                                 state.closeGeneration = (state.closeGeneration or 0) + 1
-                                killTween(windowFrame, "Position")
                                 killTween(windowFrame, "GroupTransparency")
-                                killTween(closeScale, "Scale")
-                                local target = state.closePos or Vector2.new(windowFrame.Position.X.Offset, windowFrame.Position.Y.Offset)
                                 windowFrame.Visible = true
-                                tween(closeScale, 0.25, { Scale = 1 }, Enum.EasingStyle.Quart)
-                                tween(windowFrame, 0.25, { Position = UDim2.new(0, target.X, 0, target.Y) }, Enum.EasingStyle.Quart)
-                                tween(windowFrame, 0.22, { GroupTransparency = 0 }, Enum.EasingStyle.Quad)
+                                tween(windowFrame, 0.22, { GroupTransparency = 0 }, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
                         end
 
                         local function applyFilter(q)
@@ -1623,7 +1623,7 @@ local createWindow = (function()
                         local scrim, card
 
                         local function hideConfirm()
-                                if not confirmActive then return end
+                                if not confirmActive or state.unloading then return end
                                 confirmActive = false
                                 tween(scrim, 0.15, { BackgroundTransparency = 1 })
                                 tween(card, 0.15, { Position = UDim2.new(0.5, 0, 0.5, 8), GroupTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
@@ -1636,16 +1636,18 @@ local createWindow = (function()
                         end
 
                         local function unloadNow()
-                                if state.closed then return end
-                                hideConfirm()
+                                if state.closed or state.unloading or not confirmActive then return end
+                                state.unloading = true
                                 closeWindow()
-                                task.delay(0.25, function()
-                                        pcall(function() Reborn:Unload() end)
+                                task.delay(0.22, function()
+                                        if state.unloading and gui.Parent then
+                                                pcall(function() Reborn:Unload() end)
+                                        end
                                 end)
                         end
 
                         local function showConfirm()
-                                if confirmActive then return end
+                                if confirmActive or state.closed then return end
                                 setMinimized(false)
                                 closeAllPops()
                                 if searchWrap.Size.X.Offset > 0 then closeSearch() end
@@ -3240,7 +3242,8 @@ Components.ColorPicker = (function()
                         corner(swatchFace, 6)
 
                         local popH = 22 + GEO.SVH + 10 + GEO.Swatch
-                        local pop = New("Frame", {
+                        local pop = New("CanvasGroup", {
+                                GroupTransparency = 1,
                                 AnchorPoint = Vector2.new(1, 0),
                                 Position = UDim2.new(1, -GEO.RowPad, 0, GEO.RowH + 6),
                                 Size = UDim2.new(0, GEO.PopW, 0, popH),
@@ -3250,7 +3253,7 @@ Components.ColorPicker = (function()
                                 ZIndex = 25,
                                 Parent = row,
                         })
-                        corner(pop, 8)
+                        corner(pop, 6)
                         local popFace = New("Frame", {
                                 Position = UDim2.new(0, 0, 0, 0),
                                 Size = UDim2.new(1, 0, 1, 0),
@@ -3423,8 +3426,10 @@ Components.ColorPicker = (function()
                         end
 
                         local active = nil
+                        local open = false
                         local function bindPad(el, apply)
                                 el.InputBegan:Connect(function(input)
+                                        if not open then return end
                                         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                                                 active = apply
                                                 apply(input)
@@ -3457,24 +3462,36 @@ Components.ColorPicker = (function()
                         bindPad(sv, applySV)
                         bindPad(hue, applyHue)
 
-                        local open = false
+                        local transition = 0
+                        local direction = -1
                         local function setOpen(o)
                                 if open == o then return end
                                 open = o
+                                transition = transition + 1
+                                local generation = transition
                                 if o then
                                         closeAllPops(pop)
                                         local x, y, cappedH = mountPop(row, pop, popH, GEO.PopW, true)
+                                        direction = y < row.AbsolutePosition.Y and 1 or -1
+                                        if not pop.Visible then
+                                                pop.GroupTransparency = 1
+                                                pop.Position = UDim2.new(0, x, 0, y + direction * 6)
+                                        end
                                         pop.Visible = true
-                                        pop.Position = UDim2.new(0, x, 0, y + 6)
-                                        tween(pop, 0.15, { Position = UDim2.new(0, x, 0, y) }, Enum.EasingStyle.Quint)
+                                        tween(pop, 0.22, { Position = UDim2.new(0, x, 0, y) }, Enum.EasingStyle.Quart)
+                                        tween(pop, 0.18, { GroupTransparency = 0 }, Enum.EasingStyle.Sine)
                                         registerPop(row, pop, setOpen, cappedH, GEO.PopW, true)
                                 else
                                         active = nil
-                                        tween(pop, 0.12, { Position = UDim2.new(0, pop.Position.X.Offset, 0, pop.Position.Y.Offset + 4) })
-                                        task.delay(0.14, function()
-                                                if not open and pop.Parent then pop.Visible = false end
-                                        end)
                                         unregisterPop(pop)
+                                        local pos = pop.Position
+                                        tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + direction * 4) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+                                        local exit = tween(pop, 0.15, { GroupTransparency = 1 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+                                        exit.Completed:Once(function(playback)
+                                                if playback == Enum.PlaybackState.Completed and generation == transition and not open and pop.Parent then
+                                                        pop.Visible = false
+                                                end
+                                        end)
                                 end
                         end
                         local disabled = false

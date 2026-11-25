@@ -73,7 +73,8 @@ return function(ctx)
                 corner(swatchFace, 6)
 
                 local popH = 22 + GEO.SVH + 10 + GEO.Swatch
-                local pop = New("Frame", {
+                local pop = New("CanvasGroup", {
+                        GroupTransparency = 1,
                         AnchorPoint = Vector2.new(1, 0),
                         Position = UDim2.new(1, -GEO.RowPad, 0, GEO.RowH + 6),
                         Size = UDim2.new(0, GEO.PopW, 0, popH),
@@ -83,7 +84,7 @@ return function(ctx)
                         ZIndex = 25,
                         Parent = row,
                 })
-                corner(pop, 8)
+                corner(pop, 6)
                 local popFace = New("Frame", {
                         Position = UDim2.new(0, 0, 0, 0),
                         Size = UDim2.new(1, 0, 1, 0),
@@ -256,8 +257,10 @@ return function(ctx)
                 end
 
                 local active = nil
+                local open = false
                 local function bindPad(el, apply)
                         el.InputBegan:Connect(function(input)
+                                if not open then return end
                                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                                         active = apply
                                         apply(input)
@@ -290,24 +293,36 @@ return function(ctx)
                 bindPad(sv, applySV)
                 bindPad(hue, applyHue)
 
-                local open = false
+                local transition = 0
+                local direction = -1
                 local function setOpen(o)
                         if open == o then return end
                         open = o
+                        transition = transition + 1
+                        local generation = transition
                         if o then
                                 closeAllPops(pop)
                                 local x, y, cappedH = mountPop(row, pop, popH, GEO.PopW, true)
+                                direction = y < row.AbsolutePosition.Y and 1 or -1
+                                if not pop.Visible then
+                                        pop.GroupTransparency = 1
+                                        pop.Position = UDim2.new(0, x, 0, y + direction * 6)
+                                end
                                 pop.Visible = true
-                                pop.Position = UDim2.new(0, x, 0, y + 6)
-                                tween(pop, 0.15, { Position = UDim2.new(0, x, 0, y) }, Enum.EasingStyle.Quint)
+                                tween(pop, 0.22, { Position = UDim2.new(0, x, 0, y) }, Enum.EasingStyle.Quart)
+                                tween(pop, 0.18, { GroupTransparency = 0 }, Enum.EasingStyle.Sine)
                                 registerPop(row, pop, setOpen, cappedH, GEO.PopW, true)
                         else
                                 active = nil
-                                tween(pop, 0.12, { Position = UDim2.new(0, pop.Position.X.Offset, 0, pop.Position.Y.Offset + 4) })
-                                task.delay(0.14, function()
-                                        if not open and pop.Parent then pop.Visible = false end
-                                end)
                                 unregisterPop(pop)
+                                local pos = pop.Position
+                                tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + direction * 4) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+                                local exit = tween(pop, 0.15, { GroupTransparency = 1 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+                                exit.Completed:Once(function(playback)
+                                        if playback == Enum.PlaybackState.Completed and generation == transition and not open and pop.Parent then
+                                                pop.Visible = false
+                                        end
+                                end)
                         end
                 end
                 local disabled = false
