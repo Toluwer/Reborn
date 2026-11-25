@@ -76,8 +76,11 @@ return function(ctx)
 
         local function fitHeight()
             local n = #items
-            local total = 10 + sumH + (n > 1 and (n - 1) * 2 or 0)
-            row.Size = UDim2.new(1, 0, 0, clamp(total, baseH, maxH))
+            local total = (lbl and 32 or 10) + sumH + math.max(0, n - 1) * 2
+            local height = clamp(total, baseH, maxH)
+            if row.Size.Y.Offset ~= height then
+                row.Size = UDim2.new(1, 0, 0, height)
+            end
             emptyLbl.Visible = n == 0
         end
         local function indexOf(rec)
@@ -131,22 +134,24 @@ return function(ctx)
                 end
             end
             local tx0 = ic ~= nil and 36 or 12
-            local trailRes = trailing and (rnd(measureText(trailing, 11, F.Regular)) + 14) or 0
-            local prim
+            local trailingWidth = trailing and rnd(measureText(trailing, 11, F.Regular)) or 0
+            local trailRes = trailing and trailingWidth + 14 or 0
+            local prim = New("TextLabel", {
+                AnchorPoint = secondary and Vector2.new(0, 0) or Vector2.new(0, 0.5),
+                Position = secondary and UDim2.new(0, tx0, 0, 5) or UDim2.new(0, tx0, 0.5, 0),
+                Size = UDim2.new(1, -(tx0 + 12 + trailRes), 0, 16),
+                BackgroundTransparency = 1,
+                FontFace = F.Medium,
+                TextSize = 13,
+                TextColor3 = theme.TextMuted,
+                TextTransparency = lstDisabled and 0.5 or 0,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                Text = primary,
+                ZIndex = 2,
+                Parent = ob,
+            })
             if secondary then
-                prim = New("TextLabel", {
-                    Position = UDim2.new(0, tx0, 0, 5),
-                    Size = UDim2.new(1, -(tx0 + 12 + trailRes), 0, 16),
-                    BackgroundTransparency = 1,
-                    FontFace = F.Medium,
-                    TextSize = 13,
-                    TextColor3 = theme.TextMuted,
-                    TextXAlignment = Enum.TextXAlignment.Left,
-                    TextTruncate = Enum.TextTruncate.AtEnd,
-                    Text = primary,
-                    ZIndex = 2,
-                    Parent = ob,
-                })
                 New("TextLabel", {
                     Position = UDim2.new(0, tx0, 0, 21),
                     Size = UDim2.new(1, -(tx0 + 12 + trailRes), 0, 14),
@@ -160,27 +165,12 @@ return function(ctx)
                     ZIndex = 2,
                     Parent = ob,
                 })
-            else
-                prim = New("TextLabel", {
-                    AnchorPoint = Vector2.new(0, 0.5),
-                    Position = UDim2.new(0, tx0, 0.5, 0),
-                    Size = UDim2.new(1, -(tx0 + 12 + trailRes), 0, 16),
-                    BackgroundTransparency = 1,
-                    FontFace = F.Medium,
-                    TextSize = 13,
-                    TextColor3 = theme.TextMuted,
-                    TextXAlignment = Enum.TextXAlignment.Left,
-                    TextTruncate = Enum.TextTruncate.AtEnd,
-                    Text = primary,
-                    ZIndex = 2,
-                    Parent = ob,
-                })
             end
             if trailing then
                 New("TextLabel", {
                     AnchorPoint = Vector2.new(1, 0.5),
                     Position = UDim2.new(1, -10, 0.5, 0),
-                    Size = UDim2.new(0, rnd(measureText(trailing, 11, F.Regular)) + 4, 0, 14),
+                    Size = UDim2.new(0, trailingWidth + 4, 0, 14),
                     BackgroundTransparency = 1,
                     FontFace = F.Regular,
                     TextSize = 11,
@@ -211,12 +201,13 @@ return function(ctx)
             rec = { frame = ob, primary = prim, item = item, h = ih }
             table.insert(items, rec)
             sumH = sumH + ih
-            fitHeight()
             return #items
         end
 
         function lst:Add(item)
-            return buildItem(item)
+            local index = buildItem(item)
+            fitHeight()
+            return index
         end
         function lst:Remove(index)
             if type(index) ~= "number" then return false end
@@ -233,7 +224,7 @@ return function(ctx)
             fitHeight()
             return true
         end
-        function lst:Clear()
+        local function clearItems()
             for _, rec in ipairs(items) do
                 rec.frame:Destroy()
             end
@@ -241,15 +232,20 @@ return function(ctx)
             sumH = 0
             selectedRec = nil
             lst.Selected = nil
+            nextOrder = 1
+        end
+        function lst:Clear()
+            clearItems()
             fitHeight()
         end
         function lst:SetItems(t)
-            lst:Clear()
+            clearItems()
             if type(t) == "table" then
                 for _, item in ipairs(t) do
                     buildItem(item)
                 end
             end
+            fitHeight()
         end
         function lst:SetSelected(index, fire)
             if index == nil then

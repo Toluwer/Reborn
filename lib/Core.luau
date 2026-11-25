@@ -105,12 +105,32 @@ return function(Theme)
         animation:Cancel()
     end
 
+    local textCache = {}
+    local textCacheCount = 0
+    local TEXT_CACHE_LIMIT = 512
+
+    local function cacheWidth(key, width)
+        if textCache[key] == nil then
+            if textCacheCount >= TEXT_CACHE_LIMIT then
+                table.clear(textCache)
+                textCacheCount = 0
+            end
+            textCacheCount = textCacheCount + 1
+        end
+        textCache[key] = width
+        return width
+    end
+
     local function measureText(text, size, font)
+        local key = tostring(font.Family) .. ":" .. tostring(font.Weight) .. ":" .. tostring(font.Style)
+            .. ":" .. tostring(size) .. ":" .. text
+        local cached = textCache[key]
+        if cached ~= nil then return cached end
         if font == F.Mono then
             local ok, w = pcall(function()
                 return TextService:GetTextSize(text, size, Enum.Font.Code, Vector2.new(4096, size * 2)).X
             end)
-            if ok and w then return w end
+            if ok and w then return cacheWidth(key, w) end
         else
             local params = Instance.new("GetTextBoundsParams")
             params.Text = text
@@ -121,7 +141,7 @@ return function(Theme)
                 return TextService:GetTextBoundsAsync(params)
             end)
             params:Destroy()
-            if ok and bounds then return bounds.X end
+            if ok and bounds then return cacheWidth(key, bounds.X) end
             local fallback = font.Weight == Enum.FontWeight.Bold and Enum.Font.GothamBold
                 or font.Weight == Enum.FontWeight.SemiBold and Enum.Font.GothamSemibold
                 or font.Weight == Enum.FontWeight.Medium and Enum.Font.GothamMedium

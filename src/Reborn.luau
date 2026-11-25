@@ -186,12 +186,32 @@ local createCore = (function()
             animation:Cancel()
         end
 
+        local textCache = {}
+        local textCacheCount = 0
+        local TEXT_CACHE_LIMIT = 512
+
+        local function cacheWidth(key, width)
+            if textCache[key] == nil then
+                if textCacheCount >= TEXT_CACHE_LIMIT then
+                    table.clear(textCache)
+                    textCacheCount = 0
+                end
+                textCacheCount = textCacheCount + 1
+            end
+            textCache[key] = width
+            return width
+        end
+
         local function measureText(text, size, font)
+            local key = tostring(font.Family) .. ":" .. tostring(font.Weight) .. ":" .. tostring(font.Style)
+                .. ":" .. tostring(size) .. ":" .. text
+            local cached = textCache[key]
+            if cached ~= nil then return cached end
             if font == F.Mono then
                 local ok, w = pcall(function()
                     return TextService:GetTextSize(text, size, Enum.Font.Code, Vector2.new(4096, size * 2)).X
                 end)
-                if ok and w then return w end
+                if ok and w then return cacheWidth(key, w) end
             else
                 local params = Instance.new("GetTextBoundsParams")
                 params.Text = text
@@ -202,7 +222,7 @@ local createCore = (function()
                     return TextService:GetTextBoundsAsync(params)
                 end)
                 params:Destroy()
-                if ok and bounds then return bounds.X end
+                if ok and bounds then return cacheWidth(key, bounds.X) end
                 local fallback = font.Weight == Enum.FontWeight.Bold and Enum.Font.GothamBold
                     or font.Weight == Enum.FontWeight.SemiBold and Enum.Font.GothamSemibold
                     or font.Weight == Enum.FontWeight.Medium and Enum.Font.GothamMedium
@@ -3148,7 +3168,7 @@ Components.Dropdown = (function()
                 Parent = row,
             })
 
-            local options = cfg.Options or {}
+            local options = type(cfg.Options) == "table" and table.clone(cfg.Options) or {}
             local multi = cfg.Multi and true or false
             local origOf = {}
             local optTexts = {}
@@ -3160,10 +3180,15 @@ Components.Dropdown = (function()
             local sel = {}
             local dd
             if multi then
-                for _, v in ipairs(cfg.Value or {}) do sel[tostring(v)] = true end
+                for _, value in ipairs(type(cfg.Value) == "table" and cfg.Value or {}) do
+                    sel[tostring(value)] = true
+                end
                 dd = { Value = {} }
             else
-                dd = { Value = (cfg.Value ~= nil and cfg.Value) or options[1] or "" }
+                local initial = cfg.Value
+                if initial == nil then initial = options[1] end
+                if initial == nil then initial = "" end
+                dd = { Value = initial }
             end
             local popH = 10 + math.max(#options, 1) * GEO.OptH
             local pop = New("CanvasGroup", {
@@ -3211,6 +3236,7 @@ Components.Dropdown = (function()
                 Visible = #options == 0,
                 Parent = listScroll,
             })
+            dd._open = false
             local optBtns = {}
             local function syncValue()
                 local vals = {}
@@ -3229,17 +3255,36 @@ Components.Dropdown = (function()
                 end
                 return tostring(dd.Value)
             end
+            local function isSelected(text)
+                if multi then return sel[text] == true end
+                return text == tostring(dd.Value)
+            end
+
             local function refreshChecks()
-                for _, other in ipairs(optBtns) do
-                    local on = multi and (sel[other._text] and true or false) or (other._text == tostring(dd.Value))
-                    other._chk.Visible = on
-                    other._txt.TextColor3 = on and theme.Text or theme.TextMuted
+                for _, option in ipairs(optBtns) do
+                    local selected = isSelected(option._text)
+                    option._chk.Visible = selected
+                    option._txt.TextColor3 = selected and theme.Text or theme.TextMuted
                 end
             end
-            local function fit()
-                local vw = clamp(measureText(displayText(), 13, F.Medium), 24, 160)
-                val.Size = UDim2.new(0, vw, 0, 16)
-                lbl.Size = UDim2.new(1, -(GEO.RowPad + 47 + vw), 0, 16)
+
+            local displayedText = nil
+            local function syncAll()
+                if multi then syncValue() end
+                refreshChecks()
+                local text = displayText()
+                if displayedText == text then return end
+                displayedText = text
+                val.Text = text
+                local width = clamp(measureText(text, 13, F.Medium), 24, 160)
+                if displayedText ~= text then return end
+                val.Size = UDim2.new(0, width, 0, 16)
+                lbl.Size = UDim2.new(1, -(GEO.RowPad + 47 + width), 0, 16)
+            end
+
+            local function emitSelection()
+                if not cfg.Callback then return end
+                cfg.Callback(multi and table.clone(dd.Value) or dd.Value)
             end
 
             local transition = 0
@@ -3310,39 +3355,22 @@ Components.Dropdown = (function()
                 end)
                 ob.MouseLeave:Connect(function()
                     tween(ob, 0.1, { BackgroundTransparency = 1 })
-                    tween(ot, 0.1, { TextColor3 = theme.TextMuted })
+                    tween(ot, 0.1, { TextColor3 = isSelected(otext) and theme.Text or theme.TextMuted })
                 end)
                 ob.Activated:Connect(function()
                     if not dd._open then return end
                     if multi then
-                        if sel[otext] then sel[otext] = nil else sel[otext] = true end
-                        syncValue()
-                        val.Text = displayText()
-                        fit()
-                        refreshChecks()
-                        local out = {}
-                        for i2, v2 in ipairs(dd.Value) do out[i2] = v2 end
-                        if cfg.Callback then cfg.Callback(out) end
+                        sel[otext] = not sel[otext] or nil
                     else
-                        dd.Value = origOf[otext] ~= nil and origOf[otext] or otext
-                        val.Text = otext
-                        fit()
-                        for _, other in ipairs(optBtns) do
-                            local on = other._text == otext
-                            other._chk.Visible = on
-                            other._txt.TextColor3 = on and theme.Text or theme.TextMuted
-                        end
-                        setOpen(false)
-                        if cfg.Callback then cfg.Callback(dd.Value) end
+                        local original = origOf[otext]
+                        if original == nil then original = otext end
+                        dd.Value = original
                     end
+                    syncAll()
+                    if not multi then setOpen(false) end
+                    emitSelection()
                 end)
                 table.insert(optBtns, { _btn = ob, _txt = ot, _chk = chk, _text = otext })
-            end
-            local function syncAll()
-                if multi then syncValue() end
-                refreshChecks()
-                val.Text = displayText()
-                fit()
             end
             for i, opt in ipairs(options) do
                 buildOption(i, opt)
@@ -3363,27 +3391,27 @@ Components.Dropdown = (function()
                 if multi then
                     sel = {}
                     for _, x in ipairs(type(v) == "table" and v or {}) do sel[tostring(x)] = true end
-                    syncValue()
                 else
-                    dd.Value = v ~= nil and v or ""
+                    if v == nil then v = "" end
+                    dd.Value = v
                 end
-                val.Text = displayText()
-                fit()
-                refreshChecks()
+                syncAll()
                 if not multi then setOpen(false) end
-                if fire and cfg.Callback then
-                    if multi then
-                        local out = {}
-                        for i2, v2 in ipairs(dd.Value) do out[i2] = v2 end
-                        cfg.Callback(out)
-                    else
-                        cfg.Callback(dd.Value)
-                    end
-                end
+                if fire then emitSelection() end
             end
             function dd:SetOptions(opts)
                 if type(opts) ~= "table" then return end
+                local unchanged = #opts == #options
+                if unchanged then
+                    for index, option in ipairs(options) do
+                        if opts[index] ~= option then
+                            unchanged = false
+                            break
+                        end
+                    end
+                end
                 setOpen(false)
+                if unchanged then return end
                 options = {}
                 origOf, optTexts = {}, {}
                 for i, opt in ipairs(opts) do
@@ -3404,7 +3432,11 @@ Components.Dropdown = (function()
                     for _, t in ipairs(optTexts) do
                         if t == cur then found = true break end
                     end
-                    if not found then dd.Value = options[1] ~= nil and options[1] or "" end
+                    if not found then
+                        local first = options[1]
+                        if first == nil then first = "" end
+                        dd.Value = first
+                    end
                 end
                 for _, b in ipairs(optBtns) do
                     b._btn:Destroy()
@@ -3871,17 +3903,23 @@ Components.ColorPicker = (function()
             local h, s, v = Color3.toHSV(startColor)
             local cp = { Hex = colorToHex(startColor) }
 
+            local renderedHue
             local function render(fire)
                 local color = Color3.fromHSV(h, s, v)
                 local hex = colorToHex(color)
-                svGrad.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromHSV(h, 1, 1))
+                if renderedHue ~= h then
+                    renderedHue = h
+                    svGrad.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromHSV(h, 1, 1))
+                    hdot.Position = UDim2.new(0, -2, 0, clamp(rnd(h * GEO.SVH) - 9, 0, GEO.SVH - 18))
+                end
                 local svw = GEO.PopW - 22 - GEO.HueW - 10
                 dot.Position = UDim2.new(0, clamp(rnd(s * svw) - 7, 0, svw - 14), 0, clamp(rnd((1 - v) * GEO.SVH) - 7, 0, GEO.SVH - 14))
-                hdot.Position = UDim2.new(0, -2, 0, clamp(rnd(h * GEO.SVH) - 9, 0, GEO.SVH - 18))
                 swatchFace.BackgroundColor3 = color
                 previewFace.BackgroundColor3 = color
-                hexLbl.Text = hex
-                hexVal.Text = hex
+                if hexLbl.Text ~= hex then
+                    hexLbl.Text = hex
+                    hexVal.Text = hex
+                end
                 cp.Hex = hex
                 cp.Color = color
                 if fire and cfg.Callback then cfg.Callback(hex, color) end
@@ -3899,14 +3937,18 @@ Components.ColorPicker = (function()
             local function applySV(input)
                 local r, sz = sv.AbsolutePosition, sv.AbsoluteSize
                 if sz.X < 1 or sz.Y < 1 then return end
-                s = clamp((input.Position.X - r.X) / sz.X, 0, 1)
-                v = 1 - clamp((input.Position.Y - r.Y) / sz.Y, 0, 1)
+                local saturation = clamp((input.Position.X - r.X) / sz.X, 0, 1)
+                local brightness = 1 - clamp((input.Position.Y - r.Y) / sz.Y, 0, 1)
+                if s == saturation and v == brightness then return end
+                s, v = saturation, brightness
                 render(true)
             end
             local function applyHue(input)
                 local r, sz = hue.AbsolutePosition, hue.AbsoluteSize
                 if sz.Y < 1 then return end
-                h = clamp((input.Position.Y - r.Y) / sz.Y, 0, 1)
+                local hueValue = clamp((input.Position.Y - r.Y) / sz.Y, 0, 1)
+                if h == hueValue then return end
+                h = hueValue
                 render(true)
             end
             bindPad(sv, applySV)
@@ -4441,8 +4483,11 @@ Components.List = (function()
 
             local function fitHeight()
                 local n = #items
-                local total = 10 + sumH + (n > 1 and (n - 1) * 2 or 0)
-                row.Size = UDim2.new(1, 0, 0, clamp(total, baseH, maxH))
+                local total = (lbl and 32 or 10) + sumH + math.max(0, n - 1) * 2
+                local height = clamp(total, baseH, maxH)
+                if row.Size.Y.Offset ~= height then
+                    row.Size = UDim2.new(1, 0, 0, height)
+                end
                 emptyLbl.Visible = n == 0
             end
             local function indexOf(rec)
@@ -4496,22 +4541,24 @@ Components.List = (function()
                     end
                 end
                 local tx0 = ic ~= nil and 36 or 12
-                local trailRes = trailing and (rnd(measureText(trailing, 11, F.Regular)) + 14) or 0
-                local prim
+                local trailingWidth = trailing and rnd(measureText(trailing, 11, F.Regular)) or 0
+                local trailRes = trailing and trailingWidth + 14 or 0
+                local prim = New("TextLabel", {
+                    AnchorPoint = secondary and Vector2.new(0, 0) or Vector2.new(0, 0.5),
+                    Position = secondary and UDim2.new(0, tx0, 0, 5) or UDim2.new(0, tx0, 0.5, 0),
+                    Size = UDim2.new(1, -(tx0 + 12 + trailRes), 0, 16),
+                    BackgroundTransparency = 1,
+                    FontFace = F.Medium,
+                    TextSize = 13,
+                    TextColor3 = theme.TextMuted,
+                    TextTransparency = lstDisabled and 0.5 or 0,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    TextTruncate = Enum.TextTruncate.AtEnd,
+                    Text = primary,
+                    ZIndex = 2,
+                    Parent = ob,
+                })
                 if secondary then
-                    prim = New("TextLabel", {
-                        Position = UDim2.new(0, tx0, 0, 5),
-                        Size = UDim2.new(1, -(tx0 + 12 + trailRes), 0, 16),
-                        BackgroundTransparency = 1,
-                        FontFace = F.Medium,
-                        TextSize = 13,
-                        TextColor3 = theme.TextMuted,
-                        TextXAlignment = Enum.TextXAlignment.Left,
-                        TextTruncate = Enum.TextTruncate.AtEnd,
-                        Text = primary,
-                        ZIndex = 2,
-                        Parent = ob,
-                    })
                     New("TextLabel", {
                         Position = UDim2.new(0, tx0, 0, 21),
                         Size = UDim2.new(1, -(tx0 + 12 + trailRes), 0, 14),
@@ -4525,27 +4572,12 @@ Components.List = (function()
                         ZIndex = 2,
                         Parent = ob,
                     })
-                else
-                    prim = New("TextLabel", {
-                        AnchorPoint = Vector2.new(0, 0.5),
-                        Position = UDim2.new(0, tx0, 0.5, 0),
-                        Size = UDim2.new(1, -(tx0 + 12 + trailRes), 0, 16),
-                        BackgroundTransparency = 1,
-                        FontFace = F.Medium,
-                        TextSize = 13,
-                        TextColor3 = theme.TextMuted,
-                        TextXAlignment = Enum.TextXAlignment.Left,
-                        TextTruncate = Enum.TextTruncate.AtEnd,
-                        Text = primary,
-                        ZIndex = 2,
-                        Parent = ob,
-                    })
                 end
                 if trailing then
                     New("TextLabel", {
                         AnchorPoint = Vector2.new(1, 0.5),
                         Position = UDim2.new(1, -10, 0.5, 0),
-                        Size = UDim2.new(0, rnd(measureText(trailing, 11, F.Regular)) + 4, 0, 14),
+                        Size = UDim2.new(0, trailingWidth + 4, 0, 14),
                         BackgroundTransparency = 1,
                         FontFace = F.Regular,
                         TextSize = 11,
@@ -4576,12 +4608,13 @@ Components.List = (function()
                 rec = { frame = ob, primary = prim, item = item, h = ih }
                 table.insert(items, rec)
                 sumH = sumH + ih
-                fitHeight()
                 return #items
             end
 
             function lst:Add(item)
-                return buildItem(item)
+                local index = buildItem(item)
+                fitHeight()
+                return index
             end
             function lst:Remove(index)
                 if type(index) ~= "number" then return false end
@@ -4598,7 +4631,7 @@ Components.List = (function()
                 fitHeight()
                 return true
             end
-            function lst:Clear()
+            local function clearItems()
                 for _, rec in ipairs(items) do
                     rec.frame:Destroy()
                 end
@@ -4606,15 +4639,20 @@ Components.List = (function()
                 sumH = 0
                 selectedRec = nil
                 lst.Selected = nil
+                nextOrder = 1
+            end
+            function lst:Clear()
+                clearItems()
                 fitHeight()
             end
             function lst:SetItems(t)
-                lst:Clear()
+                clearItems()
                 if type(t) == "table" then
                     for _, item in ipairs(t) do
                         buildItem(item)
                     end
                 end
+                fitHeight()
             end
             function lst:SetSelected(index, fire)
                 if index == nil then

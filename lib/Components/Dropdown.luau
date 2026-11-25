@@ -45,7 +45,7 @@ return function(ctx)
             Parent = row,
         })
 
-        local options = cfg.Options or {}
+        local options = type(cfg.Options) == "table" and table.clone(cfg.Options) or {}
         local multi = cfg.Multi and true or false
         local origOf = {}
         local optTexts = {}
@@ -57,10 +57,15 @@ return function(ctx)
         local sel = {}
         local dd
         if multi then
-            for _, v in ipairs(cfg.Value or {}) do sel[tostring(v)] = true end
+            for _, value in ipairs(type(cfg.Value) == "table" and cfg.Value or {}) do
+                sel[tostring(value)] = true
+            end
             dd = { Value = {} }
         else
-            dd = { Value = (cfg.Value ~= nil and cfg.Value) or options[1] or "" }
+            local initial = cfg.Value
+            if initial == nil then initial = options[1] end
+            if initial == nil then initial = "" end
+            dd = { Value = initial }
         end
         local popH = 10 + math.max(#options, 1) * GEO.OptH
         local pop = New("CanvasGroup", {
@@ -108,6 +113,7 @@ return function(ctx)
             Visible = #options == 0,
             Parent = listScroll,
         })
+        dd._open = false
         local optBtns = {}
         local function syncValue()
             local vals = {}
@@ -126,17 +132,36 @@ return function(ctx)
             end
             return tostring(dd.Value)
         end
+        local function isSelected(text)
+            if multi then return sel[text] == true end
+            return text == tostring(dd.Value)
+        end
+
         local function refreshChecks()
-            for _, other in ipairs(optBtns) do
-                local on = multi and (sel[other._text] and true or false) or (other._text == tostring(dd.Value))
-                other._chk.Visible = on
-                other._txt.TextColor3 = on and theme.Text or theme.TextMuted
+            for _, option in ipairs(optBtns) do
+                local selected = isSelected(option._text)
+                option._chk.Visible = selected
+                option._txt.TextColor3 = selected and theme.Text or theme.TextMuted
             end
         end
-        local function fit()
-            local vw = clamp(measureText(displayText(), 13, F.Medium), 24, 160)
-            val.Size = UDim2.new(0, vw, 0, 16)
-            lbl.Size = UDim2.new(1, -(GEO.RowPad + 47 + vw), 0, 16)
+
+        local displayedText = nil
+        local function syncAll()
+            if multi then syncValue() end
+            refreshChecks()
+            local text = displayText()
+            if displayedText == text then return end
+            displayedText = text
+            val.Text = text
+            local width = clamp(measureText(text, 13, F.Medium), 24, 160)
+            if displayedText ~= text then return end
+            val.Size = UDim2.new(0, width, 0, 16)
+            lbl.Size = UDim2.new(1, -(GEO.RowPad + 47 + width), 0, 16)
+        end
+
+        local function emitSelection()
+            if not cfg.Callback then return end
+            cfg.Callback(multi and table.clone(dd.Value) or dd.Value)
         end
 
         local transition = 0
@@ -207,39 +232,22 @@ return function(ctx)
             end)
             ob.MouseLeave:Connect(function()
                 tween(ob, 0.1, { BackgroundTransparency = 1 })
-                tween(ot, 0.1, { TextColor3 = theme.TextMuted })
+                tween(ot, 0.1, { TextColor3 = isSelected(otext) and theme.Text or theme.TextMuted })
             end)
             ob.Activated:Connect(function()
                 if not dd._open then return end
                 if multi then
-                    if sel[otext] then sel[otext] = nil else sel[otext] = true end
-                    syncValue()
-                    val.Text = displayText()
-                    fit()
-                    refreshChecks()
-                    local out = {}
-                    for i2, v2 in ipairs(dd.Value) do out[i2] = v2 end
-                    if cfg.Callback then cfg.Callback(out) end
+                    sel[otext] = not sel[otext] or nil
                 else
-                    dd.Value = origOf[otext] ~= nil and origOf[otext] or otext
-                    val.Text = otext
-                    fit()
-                    for _, other in ipairs(optBtns) do
-                        local on = other._text == otext
-                        other._chk.Visible = on
-                        other._txt.TextColor3 = on and theme.Text or theme.TextMuted
-                    end
-                    setOpen(false)
-                    if cfg.Callback then cfg.Callback(dd.Value) end
+                    local original = origOf[otext]
+                    if original == nil then original = otext end
+                    dd.Value = original
                 end
+                syncAll()
+                if not multi then setOpen(false) end
+                emitSelection()
             end)
             table.insert(optBtns, { _btn = ob, _txt = ot, _chk = chk, _text = otext })
-        end
-        local function syncAll()
-            if multi then syncValue() end
-            refreshChecks()
-            val.Text = displayText()
-            fit()
         end
         for i, opt in ipairs(options) do
             buildOption(i, opt)
@@ -260,27 +268,27 @@ return function(ctx)
             if multi then
                 sel = {}
                 for _, x in ipairs(type(v) == "table" and v or {}) do sel[tostring(x)] = true end
-                syncValue()
             else
-                dd.Value = v ~= nil and v or ""
+                if v == nil then v = "" end
+                dd.Value = v
             end
-            val.Text = displayText()
-            fit()
-            refreshChecks()
+            syncAll()
             if not multi then setOpen(false) end
-            if fire and cfg.Callback then
-                if multi then
-                    local out = {}
-                    for i2, v2 in ipairs(dd.Value) do out[i2] = v2 end
-                    cfg.Callback(out)
-                else
-                    cfg.Callback(dd.Value)
-                end
-            end
+            if fire then emitSelection() end
         end
         function dd:SetOptions(opts)
             if type(opts) ~= "table" then return end
+            local unchanged = #opts == #options
+            if unchanged then
+                for index, option in ipairs(options) do
+                    if opts[index] ~= option then
+                        unchanged = false
+                        break
+                    end
+                end
+            end
             setOpen(false)
+            if unchanged then return end
             options = {}
             origOf, optTexts = {}, {}
             for i, opt in ipairs(opts) do
@@ -301,7 +309,11 @@ return function(ctx)
                 for _, t in ipairs(optTexts) do
                     if t == cur then found = true break end
                 end
-                if not found then dd.Value = options[1] ~= nil and options[1] or "" end
+                if not found then
+                    local first = options[1]
+                    if first == nil then first = "" end
+                    dd.Value = first
+                end
             end
             for _, b in ipairs(optBtns) do
                 b._btn:Destroy()

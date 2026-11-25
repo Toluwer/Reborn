@@ -239,17 +239,23 @@ return function(ctx)
         local h, s, v = Color3.toHSV(startColor)
         local cp = { Hex = colorToHex(startColor) }
 
+        local renderedHue
         local function render(fire)
             local color = Color3.fromHSV(h, s, v)
             local hex = colorToHex(color)
-            svGrad.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromHSV(h, 1, 1))
+            if renderedHue ~= h then
+                renderedHue = h
+                svGrad.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromHSV(h, 1, 1))
+                hdot.Position = UDim2.new(0, -2, 0, clamp(rnd(h * GEO.SVH) - 9, 0, GEO.SVH - 18))
+            end
             local svw = GEO.PopW - 22 - GEO.HueW - 10
             dot.Position = UDim2.new(0, clamp(rnd(s * svw) - 7, 0, svw - 14), 0, clamp(rnd((1 - v) * GEO.SVH) - 7, 0, GEO.SVH - 14))
-            hdot.Position = UDim2.new(0, -2, 0, clamp(rnd(h * GEO.SVH) - 9, 0, GEO.SVH - 18))
             swatchFace.BackgroundColor3 = color
             previewFace.BackgroundColor3 = color
-            hexLbl.Text = hex
-            hexVal.Text = hex
+            if hexLbl.Text ~= hex then
+                hexLbl.Text = hex
+                hexVal.Text = hex
+            end
             cp.Hex = hex
             cp.Color = color
             if fire and cfg.Callback then cfg.Callback(hex, color) end
@@ -267,14 +273,18 @@ return function(ctx)
         local function applySV(input)
             local r, sz = sv.AbsolutePosition, sv.AbsoluteSize
             if sz.X < 1 or sz.Y < 1 then return end
-            s = clamp((input.Position.X - r.X) / sz.X, 0, 1)
-            v = 1 - clamp((input.Position.Y - r.Y) / sz.Y, 0, 1)
+            local saturation = clamp((input.Position.X - r.X) / sz.X, 0, 1)
+            local brightness = 1 - clamp((input.Position.Y - r.Y) / sz.Y, 0, 1)
+            if s == saturation and v == brightness then return end
+            s, v = saturation, brightness
             render(true)
         end
         local function applyHue(input)
             local r, sz = hue.AbsolutePosition, hue.AbsoluteSize
             if sz.Y < 1 then return end
-            h = clamp((input.Position.Y - r.Y) / sz.Y, 0, 1)
+            local hueValue = clamp((input.Position.Y - r.Y) / sz.Y, 0, 1)
+            if h == hueValue then return end
+            h = hueValue
             render(true)
         end
         bindPad(sv, applySV)
