@@ -7,7 +7,6 @@ A dark, minimalist UI library for Roblox, implemented in a single Luau module.
 ## Features
 
 - Draggable, resizable window with a pill minimize and viewport snapping
-- Drag-and-drop HUD overlays with live-updating text lines (`CreateHUD`)
 - Sidebar tabs with optional icons and one- or two-column layouts
 - Toggles, sliders, dropdowns, keybinds, color pickers, text inputs, buttons, paragraphs
 - Multi-select dropdowns, keybind modes (`Always` / `Toggle` / `Hold`), hover tooltips
@@ -30,18 +29,16 @@ local Reborn = loadstring(game:HttpGet(
 
 ### Roblox Studio
 
-Sync the included Rojo project:
+Create a ModuleScript named `Reborn` and paste `src/Reborn.luau` into it. For development with separate modules, use the `lib` directory as a ModuleScript tree, with `init.luau` as the root and the `Components` directory as a folder of child ModuleScripts.
 
-```sh
-rojo serve default.project.json
-```
+### Source layout
 
-```lua
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Reborn = require(ReplicatedStorage:WaitForChild("Reborn"))
-```
-
-Alternatively, create a ModuleScript named `Reborn` and paste `src/Reborn.luau` into it.
+- `lib/init.luau` — public library entry point
+- `lib/Theme.luau`, `lib/Core.luau`, `lib/Icons.luau` — shared theme, primitives and icons
+- `lib/Window.luau`, `lib/Notifications.luau` — window lifecycle and notifications
+- `lib/Components/` — individual components
+- `src/Reborn.luau` — standalone distribution, kept compatible with the existing URL
+- `examples/basic.luau` — usage example
 
 ## Quick start
 
@@ -82,14 +79,13 @@ A full example is available at [`examples/basic.luau`](examples/basic.luau).
 | Member / method | Description |
 | --- | --- |
 | `Reborn:CreateWindow(config) -> Window` | Creates the window. `config`: `Title`, `Size` (Vector2), `Theme` (partial overrides), `Parent` (ScreenGui/Instance). All fields optional. |
-| `Reborn:CreateHUD(config) -> HUD` | Creates a floating HUD overlay outside the window. See the HUD section below. |
 | `Reborn:Notify(config)` | Shows a toast. Accepts a table (`Title`, `Description`, `Type` (`"info" / "success" / "error"`), `Duration`) or a shorthand: `Notify("Title", "Description")`. |
 | `Reborn.NotificationsEnabled` | Set `false` to mute all toasts. |
 | `Reborn.Theme` | Default theme table. Pass overrides via `CreateWindow`. |
-| `Reborn:Unload()` | Full teardown: destroys every window, every HUD and the shared toast layer, disconnects all input connections and clears the registries — nothing of the library keeps running. Idempotent. The window's Close button performs exactly this. |
+| `Reborn:Unload()` | Full teardown: destroys every window and the shared toast layer, disconnects all input connections and clears the registries — nothing of the library keeps running. Idempotent. The window's Close button performs exactly this. |
 | `Reborn:Destroy()` | Alias of `Reborn:Unload()`. |
 
-`Reborn:Unload()` is a true unload, not just removing the UI: every `UserInputService` connection dies with it, so half-finished keybind captures and drags stop instantly, and every HUD goes down with the window instead of lingering on screen. Pending one-shot tweens and timers tick once against dead instances at most — they render nothing and create nothing (a debounce callback may still fire once, as in any UI library). A required module cannot evict itself from Roblox's require cache, but after `Unload` Reborn is fully inert: `CreateWindow` / `CreateHUD` / `Notify` start fresh, and once you drop your references to the returned objects the whole library is garbage-collected. Saved configs survive (they live in files or in memory, not in the UI).
+`Reborn:Unload()` is a true unload, not just removing the UI: every `UserInputService` connection dies with it, so half-finished keybind captures and drags stop instantly. Pending one-shot tweens and timers tick once against dead instances at most — they render nothing and create nothing (a debounce callback may still fire once, as in any UI library). A required module cannot evict itself from Roblox's require cache, but after `Unload` Reborn is fully inert: `CreateWindow` / `Notify` start fresh, and once you drop your references to the returned objects the whole library is garbage-collected. Saved configs survive (they live in files or in memory, not in the UI).
 
 ### Window
 
@@ -116,33 +112,6 @@ A full example is available at [`examples/basic.luau`](examples/basic.luau).
 | --- | --- |
 | `Tab:Section(name, badge?) -> Section` | Adds a section. `badge` renders a small chip next to the title. |
 | `Tab:SetColumns(2)` | Switches the page to a two-column layout. Existing sections are redistributed. |
-
-### HUD
-
-```lua
-local hud = Reborn:CreateHUD({
-    Title = "LootSight",                          -- small muted header line
-    Lines = {                                      -- stacked live text lines
-        { Text = "$12,400 in range - 87 items", Color = "Text",  TextSize = 15 },
-        { Text = "Best: Sword  $8,000 (34 studs)", Color = "Text" },
-        { Text = "You carry: $2,150 (6 items)",   Color = "Accent" },
-    },
-    Position = "TopCenter",   -- Top/Bottom x Left/Center/Right presets
-    Draggable = true,          -- drag to reposition, position remembered
-})
-```
-
-A HUD is a self-contained overlay in its own ScreenGui — it lives outside the window (no window required), renders as a card in the window's surface family (`Surface` fill, 1px `LineStrong` border, feather-smoothed corners) that hugs its content, and stacks an optional small muted `Title` above the `Lines` list. Every line is a table (`Text`, `Color`, `TextSize`) or a plain string; `Color` accepts any theme key (`"Text"`, `"TextMuted"`, `"Accent"`, `"Success"`, ...) or a `Color3`, and `TextSize` defaults to 13 (clamped 8-24). `Position` presets combine Top/Bottom with Left/Center/Right (`"TopLeft"`, `"BottomCenter"`, ...; default `"TopCenter"`, 12px from the screen edge), and `Draggable` defaults to `true` — dragging converts the card to pixel coordinates, keeps it on screen, and the dropped position is remembered for the rest of the HUD's lifetime (a later `SetVisible(false)` / `SetVisible(true)` cycle restores it; re-running the script creates a fresh HUD at the preset).
-
-| Method | Description |
-| --- | --- |
-| `hud:SetLine(i, text)` | Updates line `i` in place. Accepts a string (text only) or a line table (`Text` / `Color` / `TextSize` restyled live). Returns `false` for out-of-range indexes. |
-| `hud:SetLines(table)` | Replaces every line (strings or tables). |
-| `hud:SetTitle(text)` | Updates the header line, creating it on demand if the HUD was made without one. |
-| `hud:SetVisible(bool)` | Hides / shows the card, restoring the last dragged position. |
-| `hud:Destroy()` | Destroys the ScreenGui and disconnects the drag connections. |
-
-Multiple HUDs can coexist with each other and with windows (`Reborn:Unload()` / `Reborn:Destroy()` cleans up everything); each carries its own optional `Theme` override table and `Parent` like `CreateWindow` does.
 
 ### Icons
 
