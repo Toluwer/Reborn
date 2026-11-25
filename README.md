@@ -229,23 +229,23 @@ Any subset of keys may be overridden:
 ```lua
 Reborn:CreateWindow({
     Theme = {
-        Accent = Color3.fromRGB(0, 112, 243),
-        Text = Color3.fromRGB(220, 220, 220),
+        Accent = Color3.fromRGB(44, 103, 197),
+        Text = Color3.fromRGB(244, 244, 244),
     },
 })
 ```
 
 | Key | Value | Key | Value |
 | --- | --- | --- | --- |
-| `Background` | `#0f0f0f` | `Line` | `#222222` |
-| `Surface` | `#0f0f0f` | `LineStrong` | `#282828` |
-| `Overlay` | `#171717` | `Text` | `#dcdcdc` |
-| `Chip` | `#1e1e1e` | `TextMuted` | `#9c9c9c` |
-| `RowHover` | `#1e1e1e` | `TextFaint` | `#848484` |
-| `OptionHover` | `#262626` | `Accent` | `#0070f3` |
-| `Success` | `#29d391` | `AccentHover` | `#3291ff` |
-| `Error` | `#e63c3c` | `ToggleOff` | `#212121` |
-| `Handle` | `#f0f0f0` | | |
+| `Background` | `#111111` | `Line` | `#303030` |
+| `Surface` | `#181818` | `LineStrong` | `#383838` |
+| `Overlay` | `#242424` | `Text` | `#f4f4f4` |
+| `Chip` | `#181818` | `TextMuted` | `#aaaaaa` |
+| `RowHover` | `#2d2d2d` | `TextFaint` | `#777777` |
+| `OptionHover` | `#2d2d2d` | `Accent` | `#2c67c5` |
+| `Success` | `#29d391` | `AccentHover` | `#3b78d7` |
+| `Error` | `#e63c3c` | `ToggleOff` | `#2d2d2d` |
+| `Handle` | `#f4f4f4` | | |
 
 ## License
 

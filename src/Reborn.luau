@@ -13,33 +13,35 @@ local Reborn = {
 }
 
 local DEFAULT_THEME = {
-        Background   = Color3.fromRGB(15, 15, 15),
-        Surface      = Color3.fromRGB(15, 15, 15),
-        Overlay      = Color3.fromRGB(23, 23, 23),
-        Chip         = Color3.fromRGB(30, 30, 30),
-        RowHover     = Color3.fromRGB(30, 30, 30),
-        OptionHover  = Color3.fromRGB(38, 38, 38),
-        Line         = Color3.fromRGB(34, 34, 34),
-        LineStrong   = Color3.fromRGB(40, 40, 40),
-        Text         = Color3.fromRGB(220, 220, 220),
-        TextMuted    = Color3.fromRGB(156, 156, 156),
-        TextFaint    = Color3.fromRGB(132, 132, 132),
-        Accent       = Color3.fromRGB(0, 112, 243),
-        AccentHover  = Color3.fromRGB(50, 145, 255),
+        Background   = Color3.fromRGB(17, 17, 17),
+        Surface      = Color3.fromRGB(24, 24, 24),
+        Overlay      = Color3.fromRGB(36, 36, 36),
+        Chip         = Color3.fromRGB(24, 24, 24),
+        RowHover     = Color3.fromRGB(45, 45, 45),
+        OptionHover  = Color3.fromRGB(45, 45, 45),
+        Line         = Color3.fromRGB(48, 48, 48),
+        LineStrong   = Color3.fromRGB(56, 56, 56),
+        Text         = Color3.fromRGB(244, 244, 244),
+        TextMuted    = Color3.fromRGB(170, 170, 170),
+        TextFaint    = Color3.fromRGB(119, 119, 119),
+        Accent       = Color3.fromRGB(44, 103, 197),
+        AccentHover  = Color3.fromRGB(59, 120, 215),
         Success      = Color3.fromRGB(41, 211, 145),
         Error        = Color3.fromRGB(230, 60, 60),
-        ToggleOff    = Color3.fromRGB(33, 33, 33),
-        Handle       = Color3.fromRGB(240, 240, 240),
+        ToggleOff    = Color3.fromRGB(45, 45, 45),
+        Handle       = Color3.fromRGB(244, 244, 244),
 }
 
 Reborn.Theme = DEFAULT_THEME
 
+local INTER = "rbxassetid://12187365364"
+
 local F = {
-        Regular  = Enum.Font.Gotham,
-        Medium   = Enum.Font.GothamMedium,
-        Semibold = Enum.Font.GothamSemibold,
-        Bold     = Enum.Font.GothamBold,
-        Mono     = Enum.Font.Code,
+        Regular  = Font.new(INTER, Enum.FontWeight.Regular),
+        Medium   = Font.new(INTER, Enum.FontWeight.Medium),
+        Semibold = Font.new(INTER, Enum.FontWeight.SemiBold),
+        Bold     = Font.new(INTER, Enum.FontWeight.Bold),
+        Mono     = Font.fromEnum(Enum.Font.Code),
 }
 
 local GEO = {
@@ -52,7 +54,7 @@ local GEO = {
         WinBtnH      = 36,
         SearchW      = 150,
         SearchH      = 32,
-        Sidebar      = 156,
+        Sidebar      = 160,
         TabH         = 34,
         ContentPadT  = 16,
         ContentPadS  = 18,
@@ -196,10 +198,31 @@ local function killTween(inst, prop)
 end
 
 local function measureText(text, size, font)
-        local ok, w = pcall(function()
-                return TextService:GetTextSize(text, size, font, Vector2.new(4096, size * 2)).X
-        end)
-        if ok and w then return w end
+        if font == F.Mono then
+                local ok, w = pcall(function()
+                        return TextService:GetTextSize(text, size, Enum.Font.Code, Vector2.new(4096, size * 2)).X
+                end)
+                if ok and w then return w end
+        else
+                local params = Instance.new("GetTextBoundsParams")
+                params.Text = text
+                params.Size = size
+                params.Font = font
+                params.Width = 4096
+                local ok, bounds = pcall(function()
+                        return TextService:GetTextBoundsAsync(params)
+                end)
+                params:Destroy()
+                if ok and bounds then return bounds.X end
+                local fallback = font.Weight == Enum.FontWeight.Bold and Enum.Font.GothamBold
+                        or font.Weight == Enum.FontWeight.SemiBold and Enum.Font.GothamSemibold
+                        or font.Weight == Enum.FontWeight.Medium and Enum.Font.GothamMedium
+                        or Enum.Font.Gotham
+                local measured, w = pcall(function()
+                        return TextService:GetTextSize(text, size, fallback, Vector2.new(4096, size * 2)).X
+                end)
+                if measured and w then return w end
+        end
         return rnd(#text * size * 0.58)
 end
 
@@ -526,7 +549,7 @@ local function buildToastLayer(gui, theme)
                         Position = UDim2.new(0, 27, 0, 0),
                         Size = UDim2.new(1, -27, 0, 16),
                         BackgroundTransparency = 1,
-                        Font = F.Semibold,
+                        FontFace = F.Semibold,
                         TextSize = 13,
                         TextColor3 = theme.Text,
                         TextXAlignment = Enum.TextXAlignment.Left,
@@ -539,7 +562,7 @@ local function buildToastLayer(gui, theme)
                         Size = UDim2.new(1, -27, 0, 0),
                         AutomaticSize = Enum.AutomaticSize.Y,
                         BackgroundTransparency = 1,
-                        Font = F.Regular,
+                        FontFace = F.Regular,
                         TextSize = 12,
                         TextColor3 = theme.TextMuted,
                         TextXAlignment = Enum.TextXAlignment.Left,
@@ -692,12 +715,11 @@ function Reborn:CreateWindow(config)
         local windowFrame = New("Frame", {
                 Name = randomName(),
                 Size = UDim2.new(0, W, 0, H),
-                BackgroundColor3 = theme.LineStrong,
+                BackgroundColor3 = theme.Surface,
                 BorderSizePixel = 0,
                 Parent = gui,
         })
         local winCorner = corner(windowFrame, GEO.WindowRadius)
-        local winRing = feather(windowFrame, GEO.WindowRadius, theme.LineStrong)
         local windowFace = New("Frame", {
                 Position = UDim2.new(0, 1, 0, 1),
                 Size = UDim2.new(1, -2, 1, -2),
@@ -758,7 +780,7 @@ function Reborn:CreateWindow(config)
                 Size = UDim2.new(0, 0, 0, 16),
                 AutomaticSize = Enum.AutomaticSize.X,
                 BackgroundTransparency = 1,
-                Font = F.Semibold,
+                FontFace = F.Semibold,
                 TextSize = 14,
                 TextColor3 = theme.Text,
                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -824,7 +846,7 @@ function Reborn:CreateWindow(config)
                 Text = "",
                 PlaceholderText = "search…",
                 PlaceholderColor3 = theme.TextFaint,
-                Font = F.Regular,
+                FontFace = F.Regular,
                 TextSize = 12,
                 TextColor3 = theme.Text,
                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -871,7 +893,7 @@ function Reborn:CreateWindow(config)
 
         local sidebar = New("Frame", {
                 Size = UDim2.new(0, GEO.Sidebar, 1, 0),
-                BackgroundTransparency = 1,
+                BackgroundColor3 = theme.Background,
                 BorderSizePixel = 0,
                 Parent = bodyGroup,
         })
@@ -935,7 +957,7 @@ function Reborn:CreateWindow(config)
                 Position = UDim2.new(0, 12, 0.5, 0),
                 Size = UDim2.new(0, pillTitleW, 0, 16),
                 BackgroundTransparency = 1,
-                Font = F.Semibold,
+                FontFace = F.Semibold,
                 TextSize = 13,
                 TextColor3 = theme.Text,
                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -948,7 +970,7 @@ function Reborn:CreateWindow(config)
                 Size = UDim2.new(0, 0, 0, 15),
                 AutomaticSize = Enum.AutomaticSize.X,
                 BackgroundTransparency = 1,
-                Font = F.Regular,
+                FontFace = F.Regular,
                 TextSize = 12,
                 TextColor3 = theme.TextMuted,
                 TextTransparency = 1,
@@ -1075,7 +1097,6 @@ function Reborn:CreateWindow(config)
                         }, Enum.EasingStyle.Quint)
                         tween(winCorner, 0.36, { CornerRadius = UDim.new(0, GEO.PillH / 2 + 1) }, Enum.EasingStyle.Quint)
                         tween(faceCorner, 0.36, { CornerRadius = UDim.new(0, GEO.PillH / 2) }, Enum.EasingStyle.Quint)
-                        tween(winRing, 0.24, { BackgroundTransparency = 1 })
                         tween(windowFrame, 0.24, { BackgroundColor3 = theme.Surface })
                         task.delay(0.38, function()
                                 if state.min then
@@ -1110,8 +1131,7 @@ function Reborn:CreateWindow(config)
                         tween(windowFrame, 0.34, { Size = UDim2.new(0, W, 0, H), Position = UDim2.new(0, tx, 0, ty) }, Enum.EasingStyle.Quint)
                         tween(winCorner, 0.34, { CornerRadius = UDim.new(0, GEO.WindowRadius) }, Enum.EasingStyle.Quint)
                         tween(faceCorner, 0.34, { CornerRadius = UDim.new(0, GEO.WindowRadius - 1) }, Enum.EasingStyle.Quint)
-                        tween(winRing, 0.3, { BackgroundTransparency = 0.5 })
-                        tween(windowFrame, 0.3, { BackgroundColor3 = theme.LineStrong })
+                        tween(windowFrame, 0.3, { BackgroundColor3 = theme.Surface })
                 end
         end
 
@@ -1132,12 +1152,10 @@ function Reborn:CreateWindow(config)
                         killTween(windowFrame, "BackgroundColor3")
                         killTween(winCorner, "CornerRadius")
                         killTween(faceCorner, "CornerRadius")
-                        killTween(winRing, "BackgroundTransparency")
                         windowFrame.Size = UDim2.new(0, W, 0, H)
                         winCorner.CornerRadius = UDim.new(0, GEO.WindowRadius)
                         faceCorner.CornerRadius = UDim.new(0, GEO.WindowRadius - 1)
-                        winRing.BackgroundTransparency = 0.5
-                        windowFrame.BackgroundColor3 = theme.LineStrong
+                        windowFrame.BackgroundColor3 = theme.Surface
                         if state.minPos then
                                 windowFrame.Position = UDim2.new(0, state.minPos.x, 0, state.minPos.y)
                         end
@@ -1264,7 +1282,7 @@ function Reborn:CreateWindow(config)
                 killTween(face, "BackgroundColor3")
                 killTween(row, "BackgroundColor3")
                 killTween(rh, "BackgroundColor3")
-                face.BackgroundColor3 = theme.Surface
+                face.BackgroundColor3 = theme.Overlay
                 row.BackgroundColor3 = theme.Line
                 rh.BackgroundColor3 = theme.Line
                 face.BackgroundTransparency = d and 0.3 or 0
@@ -1278,16 +1296,16 @@ function Reborn:CreateWindow(config)
                         ZIndex = 1,
                         Parent = section.Rows,
                 })
-                corner(row, 8)
-                local rh = feather(row, 8, theme.Line)
+                corner(row, 6)
+                local rh = feather(row, 6, theme.Line)
                 local face = New("Frame", {
                         Position = UDim2.new(0, 1, 0, 1),
                         Size = UDim2.new(1, -2, 1, -2),
-                        BackgroundColor3 = theme.Surface,
+                        BackgroundColor3 = theme.Overlay,
                         BorderSizePixel = 0,
                         Parent = row,
                 })
-                corner(face, 7)
+                corner(face, 5)
                 row.MouseEnter:Connect(function()
                         if disabledRows[row] then return end
                         tween(face, 0.12, { BackgroundColor3 = theme.RowHover })
@@ -1295,7 +1313,7 @@ function Reborn:CreateWindow(config)
                         tween(rh, 0.12, { BackgroundColor3 = theme.LineStrong })
                 end)
                 row.MouseLeave:Connect(function()
-                        tween(face, 0.12, { BackgroundColor3 = theme.Surface })
+                        tween(face, 0.12, { BackgroundColor3 = theme.Overlay })
                         tween(row, 0.12, { BackgroundColor3 = theme.Line })
                         tween(rh, 0.12, { BackgroundColor3 = theme.Line })
                 end)
@@ -1308,7 +1326,7 @@ function Reborn:CreateWindow(config)
                         Position = UDim2.new(0, GEO.RowPad, 0.5, 0),
                         Size = UDim2.new(1, -(GEO.RowPad + (clear or 60)), 0, 16),
                         BackgroundTransparency = 1,
-                        Font = F.Medium,
+                        FontFace = F.Medium,
                         TextSize = 13,
                         TextColor3 = theme.Text,
                         TextXAlignment = Enum.TextXAlignment.Left,
@@ -1388,7 +1406,7 @@ function Reborn:CreateWindow(config)
                 Position = UDim2.new(0, 10, 0, 0),
                 Size = UDim2.new(1, -20, 1, 0),
                 BackgroundTransparency = 1,
-                Font = F.Regular,
+                FontFace = F.Regular,
                 TextSize = 12,
                 TextColor3 = theme.TextMuted,
                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -1605,7 +1623,7 @@ function Reborn:CreateWindow(config)
                                 Position = UDim2.new(0, 20, 0, 20),
                                 Size = UDim2.new(1, -40, 0, 16),
                                 BackgroundTransparency = 1,
-                                Font = F.Semibold,
+                                FontFace = F.Semibold,
                                 TextSize = 14,
                                 TextColor3 = theme.Text,
                                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -1616,7 +1634,7 @@ function Reborn:CreateWindow(config)
                                 Position = UDim2.new(0, 20, 0, 44),
                                 Size = UDim2.new(1, -40, 0, 40),
                                 BackgroundTransparency = 1,
-                                Font = F.Regular,
+                                FontFace = F.Regular,
                                 TextSize = 13,
                                 TextColor3 = theme.TextMuted,
                                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -1640,7 +1658,7 @@ function Reborn:CreateWindow(config)
                                 BackgroundColor3 = theme.RowHover,
                                 BackgroundTransparency = 1,
                                 Text = "Cancel",
-                                Font = F.Semibold,
+                                FontFace = F.Semibold,
                                 TextSize = 13,
                                 TextColor3 = theme.TextMuted,
                                 AutoButtonColor = false,
@@ -1662,7 +1680,7 @@ function Reborn:CreateWindow(config)
                                 Size = UDim2.new(1, -2, 1, -2),
                                 BackgroundColor3 = theme.Error,
                                 Text = "Close",
-                                Font = F.Semibold,
+                                FontFace = F.Semibold,
                                 TextSize = 13,
                                 TextColor3 = Color3.new(1, 1, 1),
                                 AutoButtonColor = false,
@@ -1830,7 +1848,7 @@ function Reborn:CreateWindow(config)
                 local lblTop = New("TextLabel", {
                         Size = UDim2.new(1, -80, 1, 0),
                         BackgroundTransparency = 1,
-                        Font = F.Medium,
+                        FontFace = F.Medium,
                         TextSize = 13,
                         TextColor3 = theme.Text,
                         TextXAlignment = Enum.TextXAlignment.Left,
@@ -1843,7 +1861,7 @@ function Reborn:CreateWindow(config)
                         Position = UDim2.new(1, 0, 0, 0),
                         Size = UDim2.new(0, 74, 1, 0),
                         BackgroundTransparency = 1,
-                        Font = F.Medium,
+                        FontFace = F.Medium,
                         TextSize = 12,
                         TextColor3 = theme.TextMuted,
                         TextXAlignment = Enum.TextXAlignment.Right,
@@ -1997,7 +2015,7 @@ function Reborn:CreateWindow(config)
                         Position = UDim2.new(1, -GEO.RowPad - 18 - 7, 0.5, 0),
                         Size = UDim2.new(0, 60, 0, 16),
                         BackgroundTransparency = 1,
-                        Font = F.Medium,
+                        FontFace = F.Medium,
                         TextSize = 13,
                         TextColor3 = theme.TextMuted,
                         TextXAlignment = Enum.TextXAlignment.Right,
@@ -2061,7 +2079,7 @@ function Reborn:CreateWindow(config)
                         Position = UDim2.new(0, 10, 0, 0),
                         Size = UDim2.new(1, -16, 0, GEO.OptH),
                         BackgroundTransparency = 1,
-                        Font = F.Medium,
+                        FontFace = F.Medium,
                         TextSize = 13,
                         TextColor3 = theme.TextFaint,
                         TextXAlignment = Enum.TextXAlignment.Left,
@@ -2138,7 +2156,7 @@ function Reborn:CreateWindow(config)
                                 Position = UDim2.new(0, 10, 0, 0),
                                 Size = UDim2.new(1, -44, 1, 0),
                                 BackgroundTransparency = 1,
-                                Font = F.Medium,
+                                FontFace = F.Medium,
                                 TextSize = 13,
                                 TextColor3 = theme.TextMuted,
                                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -2326,7 +2344,7 @@ function Reborn:CreateWindow(config)
                         Position = UDim2.new(0, 8, 0, 0),
                         Size = UDim2.new(1, -16, 1, 0),
                         BackgroundTransparency = 1,
-                        Font = F.Mono,
+                        FontFace = F.Mono,
                         TextSize = 11,
                         TextColor3 = theme.TextMuted,
                         TextXAlignment = Enum.TextXAlignment.Center,
@@ -2455,7 +2473,7 @@ function Reborn:CreateWindow(config)
         local function addColorPicker(section, cfg)
                 cfg = cfg or {}
                 local row, face, rh = makeRow(section, GEO.RowH, toWidth(cfg.Width, nil))
-                local hexW = rnd(math.max(44, measureText("#0070F3", 12, F.Mono)))
+                local hexW = rnd(math.max(44, measureText(colorToHex(theme.Accent), 12, F.Mono)))
                 local lbl = rowLabel(row, cfg.Text, hexW + 9 + GEO.Swatch + 22)
 
                 local trigger = New("TextButton", {
@@ -2471,12 +2489,12 @@ function Reborn:CreateWindow(config)
                 local hexLbl = New("TextLabel", {
                         Size = UDim2.new(0, hexW, 1, 0),
                         BackgroundTransparency = 1,
-                        Font = F.Mono,
+                        FontFace = F.Mono,
                         TextSize = 12,
                         TextColor3 = theme.TextMuted,
                         TextXAlignment = Enum.TextXAlignment.Left,
                         TextTruncate = Enum.TextTruncate.AtEnd,
-                        Text = "#0070F3",
+                        Text = colorToHex(theme.Accent),
                         ZIndex = 6,
                         Parent = trigger,
                 })
@@ -2638,7 +2656,7 @@ function Reborn:CreateWindow(config)
                         Position = UDim2.new(0, GEO.Swatch + 10, 0, GEO.SVH + 10),
                         Size = UDim2.new(0, 0, 0, GEO.Swatch),
                         BackgroundTransparency = 1,
-                        Font = F.Mono,
+                        FontFace = F.Mono,
                         TextSize = 11,
                         TextColor3 = theme.TextFaint,
                         TextXAlignment = Enum.TextXAlignment.Left,
@@ -2648,14 +2666,14 @@ function Reborn:CreateWindow(config)
                 local hexVal = New("TextLabel", {
                         AnchorPoint = Vector2.new(1, 0),
                         Position = UDim2.new(1, 0, 0, GEO.SVH + 10),
-                        Size = UDim2.new(0, rnd(math.max(52, measureText("#0070F3", 12, F.Mono))), 0, GEO.Swatch),
+                        Size = UDim2.new(0, rnd(math.max(52, measureText(colorToHex(theme.Accent), 12, F.Mono))), 0, GEO.Swatch),
                         BackgroundTransparency = 1,
-                        Font = F.Mono,
+                        FontFace = F.Mono,
                         TextSize = 12,
                         TextColor3 = theme.TextMuted,
                         TextXAlignment = Enum.TextXAlignment.Right,
                         TextTruncate = Enum.TextTruncate.AtEnd,
-                        Text = "#0070F3",
+                        Text = colorToHex(theme.Accent),
                         Parent = popFace,
                 })
 
@@ -2793,7 +2811,7 @@ function Reborn:CreateWindow(config)
                         Text = tostring(cfg.Value or ""),
                         PlaceholderText = tostring(cfg.Placeholder or ""),
                         PlaceholderColor3 = theme.TextFaint,
-                        Font = F.Regular,
+                        FontFace = F.Regular,
                         TextSize = 13,
                         TextColor3 = theme.Text,
                         TextXAlignment = Enum.TextXAlignment.Left,
@@ -2870,15 +2888,15 @@ function Reborn:CreateWindow(config)
                         ZIndex = 1,
                         Parent = section.Rows,
                 })
-                corner(shell, 8)
-                local bh = feather(shell, 8, primary and theme.Accent or theme.Line)
+                corner(shell, 6)
+                local bh = feather(shell, 6, primary and theme.Accent or theme.Line)
                 local btn = New("TextButton", {
                         Position = UDim2.new(0, 1, 0, 1),
                         Size = UDim2.new(1, -2, 1, -2),
-                        BackgroundColor3 = primary and theme.Accent or theme.RowHover,
-                        BackgroundTransparency = primary and 0 or 1,
+                        BackgroundColor3 = primary and theme.Accent or theme.Overlay,
+                        BackgroundTransparency = 0,
                         Text = btext,
-                        Font = F.Semibold,
+                        FontFace = F.Semibold,
                         TextSize = 13,
                         TextColor3 = primary and Color3.new(1, 1, 1) or theme.TextMuted,
                         TextTruncate = Enum.TextTruncate.AtEnd,
@@ -2887,7 +2905,7 @@ function Reborn:CreateWindow(config)
                         ZIndex = 2,
                         Parent = shell,
                 })
-                corner(btn, 7)
+                corner(btn, 5)
                 local disabled = false
                 if primary then
                         btn.MouseEnter:Connect(function()
@@ -2904,13 +2922,13 @@ function Reborn:CreateWindow(config)
                 else
                         btn.MouseEnter:Connect(function()
                                 if disabled then return end
-                                tween(btn, 0.13, { BackgroundTransparency = 0 })
+                                tween(btn, 0.13, { BackgroundColor3 = theme.RowHover })
                                 tween(btn, 0.13, { TextColor3 = theme.Text })
                                 tween(shell, 0.13, { BackgroundColor3 = theme.LineStrong })
                                 tween(bh, 0.13, { BackgroundColor3 = theme.LineStrong })
                         end)
                         btn.MouseLeave:Connect(function()
-                                tween(btn, 0.13, { BackgroundTransparency = 1 })
+                                tween(btn, 0.13, { BackgroundColor3 = theme.Overlay })
                                 tween(btn, 0.13, { TextColor3 = theme.TextMuted })
                                 tween(shell, 0.13, { BackgroundColor3 = theme.Line })
                                 tween(bh, 0.13, { BackgroundColor3 = theme.Line })
@@ -2936,7 +2954,9 @@ function Reborn:CreateWindow(config)
                         shell.BackgroundColor3 = primary and theme.Accent or theme.Line
                         bh.BackgroundColor3 = primary and theme.Accent or theme.Line
                         btn.TextColor3 = primary and Color3.new(1, 1, 1) or theme.TextMuted
-                        btn.BackgroundTransparency = primary and (d and 0.45 or 0) or 1
+                        killTween(btn, "BackgroundColor3")
+                        btn.BackgroundColor3 = primary and theme.Accent or theme.Overlay
+                        btn.BackgroundTransparency = d and 0.45 or 0
                         shell.BackgroundTransparency = d and 0.45 or 0
                         bh.BackgroundTransparency = d and 0.85 or 0.5
                 end
@@ -2949,7 +2969,7 @@ function Reborn:CreateWindow(config)
                         Size = UDim2.new(1, 0, 0, 0),
                         AutomaticSize = Enum.AutomaticSize.Y,
                         BackgroundTransparency = 1,
-                        Font = F.Regular,
+                        FontFace = F.Regular,
                         TextSize = 13,
                         TextColor3 = theme.TextMuted,
                         TextXAlignment = Enum.TextXAlignment.Left,
@@ -3027,7 +3047,7 @@ function Reborn:CreateWindow(config)
                                 local props = {
                                         Size = UDim2.new(1, 0, 0, wrap and 0 or size + 4),
                                         BackgroundTransparency = 1,
-                                        Font = font,
+                                        FontFace = font,
                                         TextSize = size,
                                         TextColor3 = color,
                                         TextXAlignment = Enum.TextXAlignment.Left,
@@ -3111,7 +3131,7 @@ function Reborn:CreateWindow(config)
                                 Position = UDim2.new(0, GEO.RowPad, 0, 8),
                                 Size = UDim2.new(1, -GEO.RowPad * 2, 0, 14),
                                 BackgroundTransparency = 1,
-                                Font = F.Semibold,
+                                FontFace = F.Semibold,
                                 TextSize = 11,
                                 TextColor3 = theme.TextFaint,
                                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -3143,7 +3163,7 @@ function Reborn:CreateWindow(config)
                 local emptyLbl = New("TextLabel", {
                         Size = UDim2.new(1, -16, 0, GEO.OptH),
                         BackgroundTransparency = 1,
-                        Font = F.Medium,
+                        FontFace = F.Medium,
                         TextSize = 13,
                         TextColor3 = theme.TextFaint,
                         TextXAlignment = Enum.TextXAlignment.Left,
@@ -3233,7 +3253,7 @@ function Reborn:CreateWindow(config)
                                         Position = UDim2.new(0, tx0, 0, 5),
                                         Size = UDim2.new(1, -(tx0 + 12 + trailRes), 0, 16),
                                         BackgroundTransparency = 1,
-                                        Font = F.Medium,
+                                        FontFace = F.Medium,
                                         TextSize = 13,
                                         TextColor3 = theme.TextMuted,
                                         TextXAlignment = Enum.TextXAlignment.Left,
@@ -3246,7 +3266,7 @@ function Reborn:CreateWindow(config)
                                         Position = UDim2.new(0, tx0, 0, 21),
                                         Size = UDim2.new(1, -(tx0 + 12 + trailRes), 0, 14),
                                         BackgroundTransparency = 1,
-                                        Font = F.Regular,
+                                        FontFace = F.Regular,
                                         TextSize = 11,
                                         TextColor3 = theme.TextFaint,
                                         TextXAlignment = Enum.TextXAlignment.Left,
@@ -3261,7 +3281,7 @@ function Reborn:CreateWindow(config)
                                         Position = UDim2.new(0, tx0, 0.5, 0),
                                         Size = UDim2.new(1, -(tx0 + 12 + trailRes), 0, 16),
                                         BackgroundTransparency = 1,
-                                        Font = F.Medium,
+                                        FontFace = F.Medium,
                                         TextSize = 13,
                                         TextColor3 = theme.TextMuted,
                                         TextXAlignment = Enum.TextXAlignment.Left,
@@ -3277,7 +3297,7 @@ function Reborn:CreateWindow(config)
                                         Position = UDim2.new(1, -10, 0.5, 0),
                                         Size = UDim2.new(0, rnd(measureText(trailing, 11, F.Regular)) + 4, 0, 14),
                                         BackgroundTransparency = 1,
-                                        Font = F.Regular,
+                                        FontFace = F.Regular,
                                         TextSize = 11,
                                         TextColor3 = theme.TextFaint,
                                         TextXAlignment = Enum.TextXAlignment.Right,
@@ -3477,7 +3497,7 @@ function Reborn:CreateWindow(config)
                         Size = UDim2.new(0, 0, 0, 14),
                         AutomaticSize = Enum.AutomaticSize.X,
                         BackgroundTransparency = 1,
-                        Font = F.Semibold,
+                        FontFace = F.Semibold,
                         TextSize = 11,
                         TextColor3 = theme.TextFaint,
                         TextXAlignment = Enum.TextXAlignment.Left,
@@ -3509,7 +3529,7 @@ function Reborn:CreateWindow(config)
                                 Position = UDim2.new(0, 5, 0, 2),
                                 Size = UDim2.new(1, -10, 1, -4),
                                 BackgroundTransparency = 1,
-                                Font = F.Bold,
+                                FontFace = F.Bold,
                                 TextSize = 10,
                                 TextColor3 = theme.Accent,
                                 Text = btext,
@@ -3549,14 +3569,14 @@ function Reborn:CreateWindow(config)
                         BackgroundTransparency = 1,
                         BackgroundColor3 = theme.RowHover,
                         Text = tostring(name or "Tab"),
-                        Font = F.Medium,
+                        FontFace = F.Medium,
                         TextSize = 13,
                         TextColor3 = theme.TextMuted,
                         TextXAlignment = Enum.TextXAlignment.Left,
                         AutoButtonColor = false,
                         Parent = tabsHolder,
                 })
-                corner(btn, 8)
+                corner(btn, 6)
                 local padL = 12
                 local ic = nil
                 if iconName and ICONS[iconName] then
@@ -3569,7 +3589,7 @@ function Reborn:CreateWindow(config)
                 else
                         padding(btn, 0, 12, 0, 12)
                 end
-                local tbh = feather(btn, 8, theme.RowHover, padL, 0, 12, 0)
+                local tbh = feather(btn, 6, theme.RowHover, padL, 0, 12, 0)
                 tbh.BackgroundTransparency = 1
 
                 local page = New("Frame", {
@@ -3596,7 +3616,7 @@ function Reborn:CreateWindow(config)
                         tween(btn, 0.12, { BackgroundTransparency = active and 0 or 1 })
                         tween(btn, 0.12, { TextColor3 = active and theme.Text or theme.TextMuted })
                         tween(tbh, 0.12, { BackgroundTransparency = active and 0.5 or 1 })
-                        btn.Font = active and F.Semibold or F.Medium
+                        btn.FontFace = active and F.Semibold or F.Medium
                 end
                 btn.MouseEnter:Connect(function()
                         if not page.Visible then
@@ -4033,7 +4053,7 @@ function Reborn:CreateHUD(cfg)
                                 Size = UDim2.new(0, 0, 0, 14),
                                 AutomaticSize = Enum.AutomaticSize.X,
                                 BackgroundTransparency = 1,
-                                Font = F.Semibold,
+                                FontFace = F.Semibold,
                                 TextSize = 11,
                                 TextColor3 = theme.TextFaint,
                                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -4055,7 +4075,7 @@ function Reborn:CreateHUD(cfg)
                         Size = UDim2.new(0, 0, 0, ts + 4),
                         AutomaticSize = Enum.AutomaticSize.X,
                         BackgroundTransparency = 1,
-                        Font = F.Medium,
+                        FontFace = F.Medium,
                         TextSize = ts,
                         TextColor3 = toHudColor(l.Color),
                         TextXAlignment = Enum.TextXAlignment.Left,
