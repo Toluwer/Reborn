@@ -35,7 +35,7 @@ Create a ModuleScript named `Reborn` and paste `src/Reborn.luau` into it. For de
 
 - `lib/init.luau` — public library entry point
 - `lib/Theme.luau`, `lib/Core.luau`, `lib/Icons.luau` — shared theme, primitives and icons
-- `lib/Window.luau`, `lib/Notifications.luau` — window lifecycle and notifications
+- `lib/Window.luau`, `lib/Notifications.luau`, `lib/Config.luau` — window lifecycle, notifications and configuration
 - `lib/Components/` — individual components
 - `src/Reborn.luau` — standalone distribution, kept compatible with the existing URL
 - `examples/basic.luau` — usage example
