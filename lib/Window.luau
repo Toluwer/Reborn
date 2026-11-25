@@ -1,8 +1,7 @@
-return function(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig)
+return function(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers)
     local DEFAULT_THEME = Theme.Default
     local F = Theme.Fonts
     local GEO = Theme.Geometry
-    local ICONS = Icons.Map
     local icon = Icons.Create
     local buildToastLayer = Notifications.Build
     local normNotify = Notifications.Normalize
@@ -440,7 +439,9 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             end
         end)
 
-        local closeAllPops, closeSearch
+        local popovers = createPopovers(Core, Theme, state, gui, windowFrame, connect)
+        local closeAllPops = popovers.CloseAll
+        local closeSearch
 
         local grip = New("TextButton", {
             AnchorPoint = Vector2.new(1, 1),
@@ -811,26 +812,6 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             table.insert(state.searchRows, { frame = frame, text = text and tostring(text) or "", section = section })
         end
 
-        closeAllPops = function(except)
-            for i = #state.openPops, 1, -1 do
-                if state.openPops[i].pop ~= except then
-                    state.openPops[i].close()
-                end
-            end
-        end
-
-        local function registerPop(row, pop, setOpen, popH, popW, alignRight)
-            table.insert(state.openPops, { row = row, pop = pop, popH = popH, popW = popW, alignRight = alignRight and true or false, close = function() setOpen(false) end })
-        end
-        local function unregisterPop(pop)
-            for i, p in ipairs(state.openPops) do
-                if p.pop == pop then
-                    table.remove(state.openPops, i)
-                    break
-                end
-            end
-        end
-
         local tipWrap = New("Frame", {
             Size = UDim2.new(0, 0, 0, 28),
             BackgroundTransparency = 1,
@@ -940,9 +921,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
                 end
             end
             if entry.pop then
-                for i = #state.openPops, 1, -1 do
-                    if state.openPops[i].pop == entry.pop then table.remove(state.openPops, i) end
-                end
+                popovers.Unregister(entry.pop)
             end
             if entry.row then pcall(function() entry.row:Destroy() end) end
             if entry.pop then pcall(function() entry.pop:Destroy() end) end
@@ -972,10 +951,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
                 entry.hidden = not v
                 if row then row.Visible = v end
                 if pop and not v then
-                    for i = #state.openPops, 1, -1 do
-                        local record = state.openPops[i]
-                        if record.pop == pop then record.close() end
-                    end
+                    popovers.Close(pop)
                     pop.Visible = false
                 end
             end
@@ -995,31 +971,6 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             return el
         end
 
-        local function trackTabScroll(tab)
-            local scroller = tab._scroller
-            local lastCanvasY = scroller.CanvasPosition.Y
-            connect(scroller:GetPropertyChangedSignal("CanvasPosition"), function()
-                local cy = scroller.CanvasPosition.Y
-                local d = cy - lastCanvasY
-                lastCanvasY = cy
-                if d == 0 or state.activeTab ~= tab then return end
-                local wp = windowFrame.AbsolutePosition
-                local wb = wp.Y + windowFrame.AbsoluteSize.Y
-                local topMin = wp.Y + GEO.Header + 8
-                for i = #state.openPops, 1, -1 do
-                    local p = state.openPops[i]
-                    local pos = p.pop.Position
-                    local ny = pos.Y.Offset - d
-                    local pb = ny + (p.popH or 0)
-                    if pb < topMin + 4 or ny > wb - 12 then
-                        p.close()
-                    else
-                        killTween(p.pop, "Position")
-                        p.pop.Position = UDim2.new(0, pos.X.Offset, 0, ny)
-                    end
-                end
-            end)
-        end
         dragZone.InputBegan:Connect(function() closeAllPops() end)
 
         local confirmActive = false
@@ -1182,28 +1133,6 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
 
         closeBtn.Activated:Connect(showConfirm)
 
-        local function mountPop(row, pop, popH, popW, alignRight)
-            local rp, rs = row.AbsolutePosition, row.AbsoluteSize
-            local wp = windowFrame.AbsolutePosition
-            local wb = wp.Y + windowFrame.AbsoluteSize.Y
-            local topMin = wp.Y + GEO.Header + 8
-            local capH = (wb - 8) - topMin
-            if capH > 0 and popH > capH then popH = capH end
-            local x = alignRight and (rp.X + rs.X - GEO.RowPad - popW) or rp.X
-            local y = rp.Y + rs.Y + 6
-            if y + popH > wb - 8 then
-                y = rp.Y - popH - 6
-                if y < topMin then
-                    y = topMin
-                end
-            end
-            pop.Parent = gui
-            pop.ZIndex = 45
-            pop.AnchorPoint = Vector2.new(0, 0)
-            pop.Size = UDim2.new(0, popW, 0, popH)
-            return x, y, popH
-        end
-
         local context = {
             F = F,
             GEO = GEO,
@@ -1224,12 +1153,12 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             list = list,
             makeRow = makeRow,
             measureText = measureText,
-            mountPop = mountPop,
+            mountPop = popovers.Mount,
             nextOrder = nextOrder,
             normCfg = normCfg,
             overlayBtn = overlayBtn,
             padding = padding,
-            registerPop = registerPop,
+            registerPop = popovers.Register,
             registerSearch = registerSearch,
             rnd = rnd,
             rowLabel = rowLabel,
@@ -1238,323 +1167,22 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             theme = theme,
             toWidth = toWidth,
             tween = tween,
-            unregisterPop = unregisterPop,
+            unregisterPop = popovers.Unregister,
         }
 
-        local addToggle = Components.Toggle(context)
-        context.addToggle = addToggle
-        local addSlider = Components.Slider(context)
-        context.addSlider = addSlider
-        local addDropdown = Components.Dropdown(context)
-        context.addDropdown = addDropdown
-        local addKeybind = Components.Keybind(context)
-        context.addKeybind = addKeybind
-        local addColorPicker = Components.ColorPicker(context)
-        context.addColorPicker = addColorPicker
-        local addInput = Components.Input(context)
-        context.addInput = addInput
-        local addButton = Components.Button(context)
-        context.addButton = addButton
-        local addParagraph = Components.Paragraph(context)
-        context.addParagraph = addParagraph
-        local addImage = Components.Image(context)
-        context.addImage = addImage
-        local addList = Components.List(context)
-        context.addList = addList
-        local addRowContainer = Components.Row(context)
-        context.addRowContainer = addRowContainer
+        context.addToggle = Components.Toggle(context)
+        context.addSlider = Components.Slider(context)
+        context.addDropdown = Components.Dropdown(context)
+        context.addKeybind = Components.Keybind(context)
+        context.addColorPicker = Components.ColorPicker(context)
+        context.addInput = Components.Input(context)
+        context.addButton = Components.Button(context)
+        context.addParagraph = Components.Paragraph(context)
+        context.addImage = Components.Image(context)
+        context.addList = Components.List(context)
+        context.addRowContainer = Components.Row(context)
 
-        local function newSection(tab, name, badge)
-            local parent = tab.Page
-            if tab.Columns then
-                parent = tab.Columns[tab._nextCol]
-                tab._nextCol = tab._nextCol == 1 and 2 or 1
-            end
-
-            local sec = New("Frame", {
-                Size = UDim2.new(1, 0, 0, 0),
-                AutomaticSize = Enum.AutomaticSize.Y,
-                BackgroundTransparency = 1,
-                Parent = parent,
-            })
-
-            local head = New("Frame", {
-                Position = UDim2.new(0, 2, 0, 0),
-                Size = UDim2.new(1, -4, 0, 14),
-                BackgroundTransparency = 1,
-                Parent = sec,
-            })
-            local titleText = string.upper(tostring(name or ""))
-            local titleW = measureText(titleText, 11, F.Semibold)
-            New("TextLabel", {
-                Size = UDim2.new(0, 0, 0, 14),
-                AutomaticSize = Enum.AutomaticSize.X,
-                BackgroundTransparency = 1,
-                FontFace = F.Semibold,
-                TextSize = 11,
-                TextColor3 = theme.TextFaint,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                Text = titleText,
-                Parent = head,
-            })
-            if badge then
-                local btext = string.upper(tostring(badge))
-                local badgeW = measureText(btext, 10, F.Bold) + 10
-                local bd = New("Frame", {
-                    Position = UDim2.new(0, titleW + 10, 0, -1),
-                    Size = UDim2.new(0, badgeW, 0, 16),
-                    BackgroundColor3 = theme.Accent,
-                    BackgroundTransparency = 1,
-                    BorderSizePixel = 0,
-                    Parent = head,
-                })
-                corner(bd, 4)
-                local bdFace = New("Frame", {
-                    Position = UDim2.new(0, 0, 0, 0),
-                    Size = UDim2.new(1, 0, 1, 0),
-                    BackgroundColor3 = theme.Overlay,
-                    BorderSizePixel = 0,
-                    Parent = bd,
-                })
-                corner(bdFace, 4)
-                New("TextLabel", {
-                    Position = UDim2.new(0, 5, 0, 2),
-                    Size = UDim2.new(1, -10, 1, -4),
-                    BackgroundTransparency = 1,
-                    FontFace = F.Bold,
-                    TextSize = 10,
-                    TextColor3 = theme.Accent,
-                    Text = btext,
-                    Parent = bd,
-                })
-            end
-
-            local rows = New("Frame", {
-                Position = UDim2.new(0, 0, 0, 23),
-                Size = UDim2.new(1, 0, 0, 0),
-                AutomaticSize = Enum.AutomaticSize.Y,
-                BackgroundTransparency = 1,
-                Parent = sec,
-            })
-            list(rows, GEO.RowGap)
-
-            local section = { Frame = sec, Rows = rows, _tab = tab }
-            table.insert(state.sections, section)
-
-            function section:Toggle(a, b) return addToggle(section, normCfg(a, b)) end
-            function section:Slider(a, b) return addSlider(section, normCfg(a, b)) end
-            function section:Dropdown(a, b) return addDropdown(section, normCfg(a, b)) end
-            function section:Keybind(a, b) return addKeybind(section, normCfg(a, b)) end
-            function section:ColorPicker(a, b) return addColorPicker(section, normCfg(a, b)) end
-            function section:Input(a, b) return addInput(section, normCfg(a, b)) end
-            function section:Button(a, b) return addButton(section, normCfg(a, b)) end
-            function section:Paragraph(a, b) return addParagraph(section, normCfg(a, b)) end
-            function section:Image(a, b) return addImage(section, normCfg(a, b)) end
-            function section:List(a, b) return addList(section, normCfg(a, b)) end
-            function section:Row(a, b) return addRowContainer(section, normCfg(a, b)) end
-            return section
-        end
-
-        local tabGeneration = 0
-        local function switchTab(tab)
-            local previous = state.activeTab
-            if tab == previous or state.closed or state.min then return end
-
-            closeAllPops()
-            tabGeneration = tabGeneration + 1
-            local generation = tabGeneration
-            local incoming = tab._scroller
-            local outgoing = previous and previous._scroller
-            local direction = previous and (tab._index > previous._index and 1 or -1) or 1
-            local reversing = outgoing and incoming.Visible
-
-            for _, other in ipairs(state.tabs) do
-                local scroller = other._scroller
-                killTween(scroller, "Position")
-                scroller.Interactable = false
-                scroller.ScrollingEnabled = false
-                if other ~= previous and other ~= tab then
-                    scroller.Visible = false
-                    other.Page.Visible = false
-                    scroller.Position = UDim2.new(0, 0, 0, 0)
-                end
-            end
-
-            state.activeTab = tab
-            if previous then previous._setActive(false) end
-            tab._setActive(true)
-
-            if not outgoing then
-                tab.Page.Visible = true
-                incoming.Position = UDim2.new(0, 0, 0, 0)
-                incoming.Visible = true
-                incoming.Interactable = true
-                incoming.ScrollingEnabled = true
-                return
-            end
-
-            if not reversing then
-                outgoing.Position = UDim2.new(0, 0, 0, 0)
-                incoming.Position = UDim2.new(direction, 0, 0, 0)
-                incoming.CanvasPosition = Vector2.new(0, 0)
-            end
-
-            tab.Page.Visible = true
-            incoming.Visible = true
-            outgoing.Visible = true
-
-            local duration = reversing and math.max(0.12, 0.28 * math.abs(incoming.Position.X.Scale)) or 0.28
-            tween(outgoing, duration, { Position = UDim2.new(-direction, 0, 0, 0) }, Enum.EasingStyle.Quart)
-            local arrival = tween(incoming, duration, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Quart)
-            arrival.Completed:Once(function(playback)
-                if playback ~= Enum.PlaybackState.Completed or generation ~= tabGeneration or not incoming.Parent then return end
-                outgoing.Visible = false
-                previous.Page.Visible = false
-                outgoing.Position = UDim2.new(0, 0, 0, 0)
-                incoming.Interactable = true
-                incoming.ScrollingEnabled = true
-            end)
-        end
-
-        local function addTab(name, iconName)
-            local btn = New("TextButton", {
-                Size = UDim2.new(1, 0, 0, GEO.TabH),
-                BackgroundTransparency = 1,
-                BackgroundColor3 = theme.RowHover,
-                Text = tostring(name or "Tab"),
-                FontFace = F.Medium,
-                TextSize = 13,
-                TextColor3 = theme.TextMuted,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                AutoButtonColor = false,
-                Parent = tabsHolder,
-            })
-            corner(btn, 6)
-            local ic = nil
-            if iconName and ICONS[iconName] then
-                ic = icon(btn, iconName, 16, theme.TextMuted)
-                ic.AnchorPoint = Vector2.new(0, 0.5)
-                ic.Position = UDim2.new(0, -26, 0.5, 0)
-                ic.ZIndex = 2
-                padding(btn, 0, 12, 0, 38)
-            else
-                padding(btn, 0, 12, 0, 12)
-            end
-
-            local scroller = New("ScrollingFrame", {
-                Size = UDim2.new(1, 0, 1, 0),
-                BackgroundTransparency = 1,
-                BorderSizePixel = 0,
-                ClipsDescendants = true,
-                ScrollBarThickness = 8,
-                ScrollBarImageColor3 = theme.LineStrong,
-                ScrollingDirection = Enum.ScrollingDirection.Y,
-                CanvasSize = UDim2.new(0, 0, 0, 0),
-                AutomaticCanvasSize = Enum.AutomaticSize.Y,
-                ScrollingEnabled = false,
-                Interactable = false,
-                Visible = false,
-                Parent = content,
-            })
-            local page = New("Frame", {
-                Size = UDim2.new(1, 0, 0, 0),
-                AutomaticSize = Enum.AutomaticSize.Y,
-                BackgroundTransparency = 1,
-                Visible = false,
-                Parent = scroller,
-            })
-            padding(page, GEO.ContentPadT, GEO.ContentPadS, GEO.ContentPadB, GEO.ContentPadS)
-            local pageList = list(page, GEO.SectionGap)
-
-            local tab = {
-                Name = name,
-                Button = btn,
-                Page = page,
-                _scroller = scroller,
-                _index = #state.tabs + 1,
-                Columns = nil,
-                _nextCol = 1,
-                _pageList = pageList,
-            }
-
-            local function setActive(active)
-                if ic then tween(ic, 0.12, { ImageColor3 = active and theme.Text or theme.TextMuted }) end
-                tween(btn, 0.12, { BackgroundTransparency = active and 0 or 1 })
-                tween(btn, 0.12, { TextColor3 = active and theme.Text or theme.TextMuted })
-                btn.FontFace = active and F.Semibold or F.Medium
-            end
-            btn.MouseEnter:Connect(function()
-                if state.activeTab ~= tab then
-                    tween(btn, 0.12, { BackgroundTransparency = 0 })
-                    tween(btn, 0.12, { TextColor3 = theme.Text })
-                    if ic then tween(ic, 0.12, { ImageColor3 = theme.Text }) end
-                end
-            end)
-            btn.MouseLeave:Connect(function()
-                if state.activeTab ~= tab then
-                    tween(btn, 0.12, { BackgroundTransparency = 1 })
-                    tween(btn, 0.12, { TextColor3 = theme.TextMuted })
-                    if ic then tween(ic, 0.12, { ImageColor3 = theme.TextMuted }) end
-                end
-            end)
-            btn.Activated:Connect(function()
-                switchTab(tab)
-            end)
-            tab._setActive = setActive
-
-            function tab:SetColumns(n)
-                if n ~= 2 then return end
-                if tab.Columns then return end
-                pageList:Destroy()
-                tab.Columns = {}
-                for i = 1, 2 do
-                    local col = New("Frame", {
-                        Position = UDim2.new(0.5 * (i - 1), (i == 1) and 0 or GEO.GridGap / 2, 0, 0),
-                        Size = UDim2.new(0.5, -(GEO.GridGap / 2), 0, 0),
-                        AutomaticSize = Enum.AutomaticSize.Y,
-                        BackgroundTransparency = 1,
-                        Parent = page,
-                    })
-                    list(col, GEO.SectionGap)
-                    tab.Columns[i] = col
-                end
-                local kids = {}
-                for _, child in ipairs(page:GetChildren()) do
-                    if child ~= tab.Columns[1] and child ~= tab.Columns[2] and child:IsA("GuiObject") and not child:IsA("UIListLayout") then
-                        table.insert(kids, child)
-                    end
-                end
-                local nextCol = 1
-                for _, child in ipairs(kids) do
-                    child.Size = UDim2.new(1, 0, 0, 0)
-                    child.Position = UDim2.new(0, 0, 0, 0)
-                    child.Parent = tab.Columns[nextCol]
-                    nextCol = nextCol == 1 and 2 or 1
-                end
-                tab._nextCol = nextCol
-            end
-
-            function tab:Section(name2, badge2)
-                return newSection(tab, name2, badge2)
-            end
-
-            table.insert(state.tabs, tab)
-            trackTabScroll(tab)
-            if #state.tabs == 1 then
-                state.activeTab = tab
-                page.Visible = true
-                scroller.Visible = true
-                scroller.Interactable = true
-                scroller.ScrollingEnabled = true
-                setActive(true)
-            end
-            return tab
-        end
-
-        local function inRect(el, m)
-            local p, sz = el.AbsolutePosition, el.AbsoluteSize
-            return m.X >= p.X - 1 and m.X <= p.X + sz.X + 1 and m.Y >= p.Y - 1 and m.Y <= p.Y + sz.Y + 1
-        end
+        local addTab = createNavigation(context, tabsHolder, content, popovers)
 
         connect(UserInputService.InputBegan, function(input, gameProcessed)
             if state.listening and input.UserInputType == Enum.UserInputType.Keyboard then
@@ -1587,15 +1215,10 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             end
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                 local m = Vector2.new(input.Position.X, input.Position.Y)
-                for i = #state.openPops, 1, -1 do
-                    local p = state.openPops[i]
-                    if not inRect(p.row, m) and not inRect(p.pop, m) then
-                        p.close()
-                    end
-                end
+                popovers.CloseOutside(m)
                 if state.listening and not gameProcessed then
                     local chip = state.listening._chip
-                    if chip == nil or not inRect(chip, m) then
+                    if chip == nil or not popovers.Contains(chip, m) then
                         state.listening._cancel()
                     end
                 end
@@ -1604,9 +1227,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
                 if confirmActive then
                     hideConfirm()
                 else
-                    for i = #state.openPops, 1, -1 do
-                        state.openPops[i].close()
-                    end
+                    closeAllPops()
                 end
             end
         end)
