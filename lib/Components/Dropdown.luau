@@ -10,7 +10,6 @@ return function(ctx)
     local GEO = ctx.GEO
     local F = ctx.F
     local icon = ctx.icon
-    local state = ctx.state
     local closeAllPops = ctx.closeAllPops
     local registerPop = ctx.registerPop
     local unregisterPop = ctx.unregisterPop
@@ -315,13 +314,9 @@ return function(ctx)
             pop.Size = UDim2.new(1, 0, 0, popH)
             emptyLbl.Visible = #options == 0
             syncAll()
-            for _, e in ipairs(state.searchRows) do
-                if e.frame == row then
-                    local st = tostring(cfg.Text or "")
-                    if #optTexts > 0 then st = st .. " " .. table.concat(optTexts, " ") end
-                    e.text = st
-                end
-            end
+            local searchText = tostring(cfg.Text or "")
+            if #optTexts > 0 then searchText = searchText .. " " .. table.concat(optTexts, " ") end
+            registerSearch(row, searchText, section)
         end
         local function setEnabled(v)
             disabled = not v

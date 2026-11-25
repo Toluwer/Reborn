@@ -1284,8 +1284,268 @@ local createPopovers = (function()
     end
 end)()
 
+local createLifecycle = (function()
+    return function(state, popovers)
+        local entries = state.elements
+        local searchRows = state.searchRows
+        local byRow = {}
+        local searchByRow = {}
+        local connections = {}
+        local query = ""
+        local hideTip, tipHover
+
+        local function remove(array, value)
+            local index = table.find(array, value)
+            if index then table.remove(array, index) end
+        end
+
+        local function disconnect(row)
+            local scope = connections[row]
+            if not scope then return end
+            connections[row] = nil
+            for _, connection in ipairs(scope) do
+                connection:Disconnect()
+            end
+        end
+
+        local function connect(row, signal, callback)
+            local scope = connections[row]
+            if not scope then
+                scope = {}
+                connections[row] = scope
+            end
+            local connection = signal:Connect(callback)
+            table.insert(scope, connection)
+            return connection
+        end
+
+        local function isVisible(row)
+            local entry = byRow[row]
+            return not entry or (not entry.hidden and not entry.destroyed)
+        end
+
+        local function refreshSearch()
+            if state.destroyed then return end
+            local matches = {}
+            local groups = {}
+
+            for _, record in ipairs(searchRows) do
+                local frame = record.frame
+                if frame.Parent then
+                    local visible = isVisible(frame)
+                    local match = visible and (query == "" or record.text:find(query, 1, true) ~= nil)
+                    if record.group then
+                        local group = record.group
+                        frame.Visible = visible
+                        if groups[group] == nil then groups[group] = false end
+                        if match then groups[group] = true end
+                        if match and isVisible(group) then matches[record.section] = true end
+                    else
+                        frame.Visible = match
+                        if match and record.section then matches[record.section] = true end
+                    end
+                end
+            end
+
+            for group, matched in pairs(groups) do
+                if group.Parent then
+                    group.Visible = isVisible(group) and (query == "" or matched)
+                end
+            end
+            for _, section in ipairs(state.sections) do
+                if section.Frame.Parent then
+                    section.Frame.Visible = query == "" or matches[section] == true
+                end
+            end
+        end
+
+        local function registerSearch(frame, text, section)
+            local record = searchByRow[frame]
+            if not record then
+                local group = section and section._isRow and section.Frame or nil
+                record = {
+                    frame = frame,
+                    group = group,
+                    section = group and section._parent or section,
+                }
+                searchByRow[frame] = record
+                table.insert(searchRows, record)
+            end
+            record.text = tostring(text or ""):lower()
+            if query ~= "" then refreshSearch() end
+        end
+
+        local function unregisterSearch(frame)
+            local record = searchByRow[frame]
+            if not record then return end
+            searchByRow[frame] = nil
+            remove(searchRows, record)
+            if record.group and record.group.Parent then
+                local hasChildren = false
+                for _, remaining in ipairs(searchRows) do
+                    if remaining.group == record.group then
+                        hasChildren = true
+                        break
+                    end
+                end
+                if not hasChildren then
+                    record.group.Visible = query == "" and isVisible(record.group)
+                end
+            end
+        end
+
+        local function search(text)
+            query = tostring(text or ""):lower()
+            if query ~= "" then popovers.CloseAll() end
+            refreshSearch()
+        end
+
+        local function closeElementPopup(entry)
+            if entry.pop then
+                popovers.Close(entry.pop)
+                entry.pop.Visible = false
+            end
+        end
+
+        local function destroy(entry, external)
+            if entry.destroyed then return end
+            entry.destroyed = true
+            entry.disabled = true
+
+            local row = entry.row
+            disconnect(row)
+
+            if entry.kind == "Keybind" then
+                if state.listening == entry.el then
+                    if not external and entry.el._cancel then entry.el._cancel() end
+                    state.listening = nil
+                end
+                entry.el.Callback = nil
+                entry.el.Active = false
+                remove(state.keybinds, entry.el)
+            end
+
+            if not external and entry.setEnabled then
+                pcall(entry.setEnabled, false)
+            end
+
+            if entry.pop then
+                popovers.Unregister(entry.pop)
+                entry.pop:Destroy()
+            end
+
+            unregisterSearch(row)
+            byRow[row] = nil
+            remove(entries, entry)
+
+            if not external then row:Destroy() end
+            if not state.destroyed then refreshSearch() end
+        end
+
+        local function finish(kind, el, cfg, row, hosts, pop, setEnabled)
+            el._kind = kind
+            el.Flag = cfg.Flag
+            el._row = row
+
+            local entry = {
+                kind = kind,
+                el = el,
+                cfg = cfg,
+                row = row,
+                pop = pop,
+                setEnabled = setEnabled,
+                disabled = false,
+                hidden = false,
+                destroyed = false,
+            }
+            byRow[row] = entry
+            table.insert(entries, entry)
+
+            local callback = cfg.Callback
+            if callback then
+                cfg.Callback = function(...)
+                    if entry.disabled or entry.destroyed or state.destroyed then return end
+                    return callback(...)
+                end
+                if kind == "Keybind" then el.Callback = cfg.Callback end
+            end
+
+            function el:SetEnabled(value)
+                local disabled = not value
+                if entry.destroyed or state.destroyed or entry.disabled == disabled then return end
+                entry.disabled = disabled
+                if setEnabled then setEnabled(not disabled) end
+            end
+
+            function el:SetVisible(value)
+                if entry.destroyed or state.destroyed then return end
+                entry.hidden = not value
+                if not value then
+                    closeElementPopup(entry)
+                    if kind == "Row" then
+                        for _, child in ipairs(entries) do
+                            if child.row.Parent == row then closeElementPopup(child) end
+                        end
+                    end
+                end
+                row.Visible = not entry.hidden
+                refreshSearch()
+                if not value and hideTip then hideTip() end
+            end
+
+            function el:SetTooltip(text)
+                if entry.destroyed or state.destroyed then return end
+                cfg.Tooltip = text
+                if hideTip and (not text or tostring(text) == "") then hideTip() end
+            end
+
+            function el:Destroy()
+                if entry.destroyed then return end
+                if hideTip and not state.destroyed then hideTip() end
+                destroy(entry, false)
+            end
+
+            connect(row, row.Destroying, function()
+                destroy(entry, true)
+            end)
+
+            if tipHover and hosts and #hosts > 0 then
+                tipHover(row, cfg, hosts)
+            end
+            if query ~= "" then refreshSearch() end
+            return el
+        end
+
+        local function destroyAll()
+            while #entries > 0 do
+                destroy(entries[#entries], true)
+            end
+            for row in pairs(connections) do
+                disconnect(row)
+            end
+            table.clear(byRow)
+            table.clear(searchByRow)
+            table.clear(searchRows)
+        end
+
+        local function setTooltips(hide, hover)
+            hideTip = hide
+            tipHover = hover
+        end
+
+        return {
+            Connect = connect,
+            RegisterSearch = registerSearch,
+            Search = search,
+            Finish = finish,
+            DestroyAll = destroyAll,
+            SetTooltips = setTooltips,
+        }
+    end
+end)()
+
 local createWindow = (function()
-    return function(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers)
+    return function(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle)
         local DEFAULT_THEME = Theme.Default
         local F = Theme.Fonts
         local GEO = Theme.Geometry
@@ -1348,34 +1608,10 @@ local createWindow = (function()
             gui.Parent = parent
 
             local conns = {}
-            local componentConnections = {}
 
             local function connect(signal, callback)
                 local connection = signal:Connect(callback)
                 table.insert(conns, connection)
-                return connection
-            end
-
-            local function disconnectComponent(row)
-                local connections = componentConnections[row]
-                if not connections then return end
-                componentConnections[row] = nil
-                for _, connection in ipairs(connections) do
-                    connection:Disconnect()
-                end
-            end
-
-            local function connectComponent(row, signal, callback)
-                local connections = componentConnections[row]
-                if not connections then
-                    connections = {}
-                    componentConnections[row] = connections
-                    table.insert(connections, row.Destroying:Connect(function()
-                        disconnectComponent(row)
-                    end))
-                end
-                local connection = signal:Connect(callback)
-                table.insert(connections, connection)
                 return connection
             end
 
@@ -1728,6 +1964,7 @@ local createWindow = (function()
 
             local popovers = createPopovers(Core, Theme, state, gui, windowFrame, connect)
             local closeAllPops = popovers.CloseAll
+            local lifecycle = createLifecycle(state, popovers)
             local closeSearch
 
             local grip = New("TextButton", {
@@ -1926,24 +2163,7 @@ local createWindow = (function()
                 tween(windowFrame, 0.22, { GroupTransparency = 0 }, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
             end
 
-            local function applyFilter(q)
-                q = tostring(q or ""):lower()
-                if q ~= "" then closeAllPops() end
-                for _, e in ipairs(state.searchRows) do
-                    local match = q == "" or (e.text ~= nil and e.text:lower():find(q, 1, true) ~= nil)
-                    e.frame.Visible = match
-                end
-                for _, sec in ipairs(state.sections) do
-                    local any = false
-                    for _, e in ipairs(state.searchRows) do
-                        if e.section == sec and e.frame.Visible then
-                            any = true
-                            break
-                        end
-                    end
-                    sec.Frame.Visible = any
-                end
-            end
+            local applyFilter = lifecycle.Search
 
             local searchOpen = false
             local searchGeneration = 0
@@ -2084,21 +2304,6 @@ local createWindow = (function()
                 })
             end
 
-            local function registerSearch(frame, text, section)
-                if section and section._isRow then
-                    local e = section._search
-                    if e == nil then
-                        e = { frame = section.Frame, text = "", section = section._parent }
-                        section._search = e
-                        table.insert(state.searchRows, e)
-                    end
-                    local add = tostring(text or "")
-                    e.text = e.text == "" and add or (e.text .. " " .. add)
-                    return
-                end
-                table.insert(state.searchRows, { frame = frame, text = text and tostring(text) or "", section = section })
-            end
-
             local tipWrap = New("Frame", {
                 Size = UDim2.new(0, 0, 0, 28),
                 BackgroundTransparency = 1,
@@ -2181,82 +2386,7 @@ local createWindow = (function()
                 end
             end
 
-            local function destroyElement(entry)
-                if entry.destroyed then return end
-                entry.destroyed = true
-                entry.disabled = true
-                disconnectComponent(entry.row)
-                if entry.setEnabled then
-                    entry.setEnabled(false)
-                end
-                for i, e in ipairs(state.elements) do
-                    if e == entry then
-                        table.remove(state.elements, i)
-                        break
-                    end
-                end
-                for i = #state.searchRows, 1, -1 do
-                    if state.searchRows[i].frame == entry.row then table.remove(state.searchRows, i) end
-                end
-                if entry.kind == "Keybind" then
-                    for i = #state.keybinds, 1, -1 do
-                        if state.keybinds[i] == entry.el then table.remove(state.keybinds, i) end
-                    end
-                    if state.listening == entry.el then
-                        if entry.el._cancel then entry.el._cancel() end
-                        state.listening = nil
-                    end
-                end
-                if entry.pop then
-                    popovers.Unregister(entry.pop)
-                end
-                if entry.row then pcall(function() entry.row:Destroy() end) end
-                if entry.pop then pcall(function() entry.pop:Destroy() end) end
-            end
-
-            local function finishElement(kind, el, cfg, row, hosts, pop, setEnabled)
-                el._kind = kind
-                el.Flag = cfg.Flag
-                el._row = row
-                local userCb = cfg.Callback
-                local entry = { kind = kind, el = el, cfg = cfg, row = row, pop = pop, disabled = false, setEnabled = setEnabled }
-                if userCb then
-                    cfg.Callback = function(...)
-                        if entry.disabled or entry.destroyed or state.destroyed then return end
-                        return userCb(...)
-                    end
-                end
-                function el:SetEnabled(v)
-                    local d = not (v and true or false)
-                    if entry.destroyed or entry.disabled == d then return end
-                    entry.disabled = d
-                    if setEnabled then setEnabled(not d) end
-                end
-                function el:SetVisible(v)
-                    if entry.destroyed then return end
-                    v = v and true or false
-                    entry.hidden = not v
-                    if row then row.Visible = v end
-                    if pop and not v then
-                        popovers.Close(pop)
-                        pop.Visible = false
-                    end
-                end
-                function el:SetTooltip(text)
-                    if entry.destroyed then return end
-                    cfg.Tooltip = text
-                    if not text or tostring(text) == "" then hideTip() end
-                end
-                function el:Destroy()
-                    hideTip()
-                    destroyElement(entry)
-                end
-                table.insert(state.elements, entry)
-                if hosts and #hosts > 0 then
-                    tipHover(row, cfg, hosts)
-                end
-                return el
-            end
+            lifecycle.SetTooltips(hideTip, tipHover)
 
             dragZone.InputBegan:Connect(function() closeAllPops() end)
 
@@ -2430,9 +2560,9 @@ local createWindow = (function()
                 clamp = clamp,
                 closeAllPops = closeAllPops,
                 colorToHex = colorToHex,
-                connect = connectComponent,
+                connect = lifecycle.Connect,
                 corner = corner,
-                finishElement = finishElement,
+                finishElement = lifecycle.Finish,
                 fmtNum = fmtNum,
                 hexToColor = hexToColor,
                 icon = icon,
@@ -2446,7 +2576,7 @@ local createWindow = (function()
                 overlayBtn = overlayBtn,
                 padding = padding,
                 registerPop = popovers.Register,
-                registerSearch = registerSearch,
+                registerSearch = lifecycle.RegisterSearch,
                 rnd = rnd,
                 rowLabel = rowLabel,
                 setRowDim = setRowDim,
@@ -2591,19 +2721,9 @@ local createWindow = (function()
                     connection:Disconnect()
                 end
                 table.clear(conns)
-                for row in pairs(componentConnections) do
-                    disconnectComponent(row)
-                end
-                for i = #state.elements, 1, -1 do
-                    local entry = state.elements[i]
-                    entry.disabled = true
-                    entry.destroyed = true
-                    if entry.setEnabled then pcall(entry.setEnabled, false) end
-                end
-                table.clear(state.elements)
+                lifecycle.DestroyAll()
                 table.clear(state.keybinds)
                 table.clear(state.openPops)
-                table.clear(state.searchRows)
                 table.clear(state.sections)
                 state.listening = nil
 
@@ -2924,7 +3044,6 @@ Components.Dropdown = (function()
         local GEO = ctx.GEO
         local F = ctx.F
         local icon = ctx.icon
-        local state = ctx.state
         local closeAllPops = ctx.closeAllPops
         local registerPop = ctx.registerPop
         local unregisterPop = ctx.unregisterPop
@@ -3229,13 +3348,9 @@ Components.Dropdown = (function()
                 pop.Size = UDim2.new(1, 0, 0, popH)
                 emptyLbl.Visible = #options == 0
                 syncAll()
-                for _, e in ipairs(state.searchRows) do
-                    if e.frame == row then
-                        local st = tostring(cfg.Text or "")
-                        if #optTexts > 0 then st = st .. " " .. table.concat(optTexts, " ") end
-                        e.text = st
-                    end
-                end
+                local searchText = tostring(cfg.Text or "")
+                if #optTexts > 0 then searchText = searchText .. " " .. table.concat(optTexts, " ") end
+                registerSearch(row, searchText, section)
             end
             local function setEnabled(v)
                 disabled = not v
@@ -4512,17 +4627,30 @@ Components.Row = (function()
                 _cells = {},
                 _children = {},
             }
-            local function addCell(el, c)
-                table.insert(r._children, el)
-                table.insert(r._cells, { frame = el._row, fixed = c and c.Width ~= nil or false })
-                local n = #r._cells
-                local share = rnd(gap * (n - 1) / n)
-                for i, cell in ipairs(r._cells) do
-                    cell.frame.LayoutOrder = i
+            local function layoutCells()
+                local count = #r._cells
+                if count == 0 then return end
+                local share = rnd(gap * (count - 1) / count)
+                for index, cell in ipairs(r._cells) do
+                    cell.frame.LayoutOrder = index
                     if not cell.fixed then
-                        cell.frame.Size = UDim2.new(1 / n, -share, 0, cell.frame.Size.Y.Offset)
+                        cell.frame.Size = UDim2.new(1 / count, -share, 0, cell.frame.Size.Y.Offset)
                     end
                 end
+            end
+
+            local function addCell(el, config)
+                local cell = { frame = el._row, fixed = config and config.Width ~= nil or false }
+                table.insert(r._children, el)
+                table.insert(r._cells, cell)
+                cell.frame.Destroying:Connect(function()
+                    local index = table.find(r._cells, cell)
+                    if index then table.remove(r._cells, index) end
+                    index = table.find(r._children, el)
+                    if index then table.remove(r._children, index) end
+                    if container.Parent then layoutCells() end
+                end)
+                layoutCells()
             end
             function r:Button(a, b)
                 local c = normCfg(a, b)
@@ -4557,10 +4685,8 @@ Components.Row = (function()
             finishElement("Row", r, cfg, container, { container })
             local baseDestroy = r.Destroy
             function r:Destroy()
-                for _, child in ipairs(r._children) do
-                    pcall(function()
-                        child:Destroy()
-                    end)
+                for _, child in ipairs(table.clone(r._children)) do
+                    child:Destroy()
                 end
                 baseDestroy(self)
             end
@@ -4582,7 +4708,7 @@ Reborn.Theme = Theme.Default
 local Core = createCore(Theme)
 local Icons = createIcons(Core)
 local Notifications = createNotifications(Reborn, Core, Theme, Icons)
-createWindow(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers)
+createWindow(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle)
 
 function Reborn:Unload()
     for i = #self._windows, 1, -1 do

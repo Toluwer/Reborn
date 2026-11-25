@@ -33,17 +33,30 @@ return function(ctx)
             _cells = {},
             _children = {},
         }
-        local function addCell(el, c)
-            table.insert(r._children, el)
-            table.insert(r._cells, { frame = el._row, fixed = c and c.Width ~= nil or false })
-            local n = #r._cells
-            local share = rnd(gap * (n - 1) / n)
-            for i, cell in ipairs(r._cells) do
-                cell.frame.LayoutOrder = i
+        local function layoutCells()
+            local count = #r._cells
+            if count == 0 then return end
+            local share = rnd(gap * (count - 1) / count)
+            for index, cell in ipairs(r._cells) do
+                cell.frame.LayoutOrder = index
                 if not cell.fixed then
-                    cell.frame.Size = UDim2.new(1 / n, -share, 0, cell.frame.Size.Y.Offset)
+                    cell.frame.Size = UDim2.new(1 / count, -share, 0, cell.frame.Size.Y.Offset)
                 end
             end
+        end
+
+        local function addCell(el, config)
+            local cell = { frame = el._row, fixed = config and config.Width ~= nil or false }
+            table.insert(r._children, el)
+            table.insert(r._cells, cell)
+            cell.frame.Destroying:Connect(function()
+                local index = table.find(r._cells, cell)
+                if index then table.remove(r._cells, index) end
+                index = table.find(r._children, el)
+                if index then table.remove(r._children, index) end
+                if container.Parent then layoutCells() end
+            end)
+            layoutCells()
         end
         function r:Button(a, b)
             local c = normCfg(a, b)
@@ -78,10 +91,8 @@ return function(ctx)
         finishElement("Row", r, cfg, container, { container })
         local baseDestroy = r.Destroy
         function r:Destroy()
-            for _, child in ipairs(r._children) do
-                pcall(function()
-                    child:Destroy()
-                end)
+            for _, child in ipairs(table.clone(r._children)) do
+                child:Destroy()
             end
             baseDestroy(self)
         end

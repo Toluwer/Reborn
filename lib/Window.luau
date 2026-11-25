@@ -1,4 +1,4 @@
-return function(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers)
+return function(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle)
     local DEFAULT_THEME = Theme.Default
     local F = Theme.Fonts
     local GEO = Theme.Geometry
@@ -61,34 +61,10 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
         gui.Parent = parent
 
         local conns = {}
-        local componentConnections = {}
 
         local function connect(signal, callback)
             local connection = signal:Connect(callback)
             table.insert(conns, connection)
-            return connection
-        end
-
-        local function disconnectComponent(row)
-            local connections = componentConnections[row]
-            if not connections then return end
-            componentConnections[row] = nil
-            for _, connection in ipairs(connections) do
-                connection:Disconnect()
-            end
-        end
-
-        local function connectComponent(row, signal, callback)
-            local connections = componentConnections[row]
-            if not connections then
-                connections = {}
-                componentConnections[row] = connections
-                table.insert(connections, row.Destroying:Connect(function()
-                    disconnectComponent(row)
-                end))
-            end
-            local connection = signal:Connect(callback)
-            table.insert(connections, connection)
             return connection
         end
 
@@ -441,6 +417,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
 
         local popovers = createPopovers(Core, Theme, state, gui, windowFrame, connect)
         local closeAllPops = popovers.CloseAll
+        local lifecycle = createLifecycle(state, popovers)
         local closeSearch
 
         local grip = New("TextButton", {
@@ -639,24 +616,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             tween(windowFrame, 0.22, { GroupTransparency = 0 }, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
         end
 
-        local function applyFilter(q)
-            q = tostring(q or ""):lower()
-            if q ~= "" then closeAllPops() end
-            for _, e in ipairs(state.searchRows) do
-                local match = q == "" or (e.text ~= nil and e.text:lower():find(q, 1, true) ~= nil)
-                e.frame.Visible = match
-            end
-            for _, sec in ipairs(state.sections) do
-                local any = false
-                for _, e in ipairs(state.searchRows) do
-                    if e.section == sec and e.frame.Visible then
-                        any = true
-                        break
-                    end
-                end
-                sec.Frame.Visible = any
-            end
-        end
+        local applyFilter = lifecycle.Search
 
         local searchOpen = false
         local searchGeneration = 0
@@ -797,21 +757,6 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             })
         end
 
-        local function registerSearch(frame, text, section)
-            if section and section._isRow then
-                local e = section._search
-                if e == nil then
-                    e = { frame = section.Frame, text = "", section = section._parent }
-                    section._search = e
-                    table.insert(state.searchRows, e)
-                end
-                local add = tostring(text or "")
-                e.text = e.text == "" and add or (e.text .. " " .. add)
-                return
-            end
-            table.insert(state.searchRows, { frame = frame, text = text and tostring(text) or "", section = section })
-        end
-
         local tipWrap = New("Frame", {
             Size = UDim2.new(0, 0, 0, 28),
             BackgroundTransparency = 1,
@@ -894,82 +839,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             end
         end
 
-        local function destroyElement(entry)
-            if entry.destroyed then return end
-            entry.destroyed = true
-            entry.disabled = true
-            disconnectComponent(entry.row)
-            if entry.setEnabled then
-                entry.setEnabled(false)
-            end
-            for i, e in ipairs(state.elements) do
-                if e == entry then
-                    table.remove(state.elements, i)
-                    break
-                end
-            end
-            for i = #state.searchRows, 1, -1 do
-                if state.searchRows[i].frame == entry.row then table.remove(state.searchRows, i) end
-            end
-            if entry.kind == "Keybind" then
-                for i = #state.keybinds, 1, -1 do
-                    if state.keybinds[i] == entry.el then table.remove(state.keybinds, i) end
-                end
-                if state.listening == entry.el then
-                    if entry.el._cancel then entry.el._cancel() end
-                    state.listening = nil
-                end
-            end
-            if entry.pop then
-                popovers.Unregister(entry.pop)
-            end
-            if entry.row then pcall(function() entry.row:Destroy() end) end
-            if entry.pop then pcall(function() entry.pop:Destroy() end) end
-        end
-
-        local function finishElement(kind, el, cfg, row, hosts, pop, setEnabled)
-            el._kind = kind
-            el.Flag = cfg.Flag
-            el._row = row
-            local userCb = cfg.Callback
-            local entry = { kind = kind, el = el, cfg = cfg, row = row, pop = pop, disabled = false, setEnabled = setEnabled }
-            if userCb then
-                cfg.Callback = function(...)
-                    if entry.disabled or entry.destroyed or state.destroyed then return end
-                    return userCb(...)
-                end
-            end
-            function el:SetEnabled(v)
-                local d = not (v and true or false)
-                if entry.destroyed or entry.disabled == d then return end
-                entry.disabled = d
-                if setEnabled then setEnabled(not d) end
-            end
-            function el:SetVisible(v)
-                if entry.destroyed then return end
-                v = v and true or false
-                entry.hidden = not v
-                if row then row.Visible = v end
-                if pop and not v then
-                    popovers.Close(pop)
-                    pop.Visible = false
-                end
-            end
-            function el:SetTooltip(text)
-                if entry.destroyed then return end
-                cfg.Tooltip = text
-                if not text or tostring(text) == "" then hideTip() end
-            end
-            function el:Destroy()
-                hideTip()
-                destroyElement(entry)
-            end
-            table.insert(state.elements, entry)
-            if hosts and #hosts > 0 then
-                tipHover(row, cfg, hosts)
-            end
-            return el
-        end
+        lifecycle.SetTooltips(hideTip, tipHover)
 
         dragZone.InputBegan:Connect(function() closeAllPops() end)
 
@@ -1143,9 +1013,9 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             clamp = clamp,
             closeAllPops = closeAllPops,
             colorToHex = colorToHex,
-            connect = connectComponent,
+            connect = lifecycle.Connect,
             corner = corner,
-            finishElement = finishElement,
+            finishElement = lifecycle.Finish,
             fmtNum = fmtNum,
             hexToColor = hexToColor,
             icon = icon,
@@ -1159,7 +1029,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             overlayBtn = overlayBtn,
             padding = padding,
             registerPop = popovers.Register,
-            registerSearch = registerSearch,
+            registerSearch = lifecycle.RegisterSearch,
             rnd = rnd,
             rowLabel = rowLabel,
             setRowDim = setRowDim,
@@ -1304,19 +1174,9 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
                 connection:Disconnect()
             end
             table.clear(conns)
-            for row in pairs(componentConnections) do
-                disconnectComponent(row)
-            end
-            for i = #state.elements, 1, -1 do
-                local entry = state.elements[i]
-                entry.disabled = true
-                entry.destroyed = true
-                if entry.setEnabled then pcall(entry.setEnabled, false) end
-            end
-            table.clear(state.elements)
+            lifecycle.DestroyAll()
             table.clear(state.keybinds)
             table.clear(state.openPops)
-            table.clear(state.searchRows)
             table.clear(state.sections)
             state.listening = nil
 
