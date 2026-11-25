@@ -895,20 +895,23 @@ local createWindow = (function()
                         end
 
                         local searchWrap = New("Frame", {
-                                Position = UDim2.new(0, 0, 0, 7),
+                                AnchorPoint = Vector2.new(1, 0),
+                                Position = UDim2.new(0, GEO.SearchW, 0, 7),
                                 Size = UDim2.new(0, 0, 0, GEO.SearchH),
-                                BackgroundColor3 = theme.LineStrong,
-                                BackgroundTransparency = 1,
+                                BackgroundColor3 = theme.Overlay,
+                                BackgroundTransparency = 0,
                                 BorderSizePixel = 0,
+                                ClipsDescendants = true,
                                 Visible = false,
                                 Parent = cluster,
                         })
                         corner(searchWrap, 6)
                         local searchBox = New("TextBox", {
-                                Position = UDim2.new(0, 0, 0, 0),
-                                Size = UDim2.new(1, 0, 1, 0),
-                                BackgroundColor3 = theme.Overlay,
+                                AnchorPoint = Vector2.new(1, 0),
+                                Position = UDim2.new(1, 0, 0, 0),
+                                Size = UDim2.new(0, GEO.SearchW, 1, 0),
                                 BackgroundTransparency = 1,
+                                TextTransparency = 1,
                                 Text = "",
                                 PlaceholderText = "search…",
                                 PlaceholderColor3 = theme.TextFaint,
@@ -1313,40 +1316,77 @@ local createWindow = (function()
                         end
 
                         local searchOpen = false
+                        local searchGeneration = 0
+                        local searchPress = nil
+                        local searchLostDuringPress = false
+
                         local function openSearch()
+                                if searchOpen or state.closed or state.min then return end
+                                searchGeneration = searchGeneration + 1
+                                searchBox.Text = ""
                                 searchOpen = true
                                 searchWrap.Visible = true
-                                tween(searchWrap, 0.18, { Size = UDim2.new(0, GEO.SearchW, 0, GEO.SearchH) })
-                                tween(searchBox, 0.15, { BackgroundTransparency = 0 })
+                                tween(searchWrap, 0.25, { Size = UDim2.new(0, GEO.SearchW, 0, GEO.SearchH) }, Enum.EasingStyle.Quart)
+                                tween(searchBox, 0.20, { TextTransparency = 0 }, Enum.EasingStyle.Sine)
                                 searchBox:CaptureFocus()
                         end
 
                         closeSearch = function()
+                                if not searchOpen then return end
                                 searchOpen = false
-                                searchBox.Text = ""
-                                applyFilter("")
+                                searchGeneration = searchGeneration + 1
+                                local generation = searchGeneration
                                 searchBox:ReleaseFocus()
-                                tween(searchWrap, 0.18, { Size = UDim2.new(0, 0, 0, GEO.SearchH) })
-                                tween(searchBox, 0.15, { BackgroundTransparency = 1 })
-                                task.delay(0.2, function()
-                                        if not searchOpen and searchWrap.Size.X.Offset <= 0 then
+                                applyFilter("")
+                                tween(searchBox, 0.12, { TextTransparency = 1 }, Enum.EasingStyle.Sine)
+                                local exit = tween(searchWrap, 0.19, { Size = UDim2.new(0, 0, 0, GEO.SearchH) }, Enum.EasingStyle.Quart, Enum.EasingDirection.InOut)
+                                exit.Completed:Once(function(playback)
+                                        if playback == Enum.PlaybackState.Completed and generation == searchGeneration and not searchOpen and searchWrap.Parent then
                                                 searchWrap.Visible = false
+                                                searchBox.Text = ""
                                         end
                                 end)
                         end
 
+                        searchBtn.InputBegan:Connect(function(input)
+                                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                                        searchPress = input
+                                        searchLostDuringPress = false
+                                end
+                        end)
+                        connect(UserInputService.InputEnded, function(input)
+                                if searchPress ~= input then return end
+                                task.defer(function()
+                                        if searchPress ~= input then return end
+                                        searchPress = nil
+                                        if searchLostDuringPress and searchOpen and not searchBox:IsFocused() then
+                                                closeSearch()
+                                        end
+                                        searchLostDuringPress = false
+                                end)
+                        end)
                         searchBtn.Activated:Connect(function()
-                                if searchWrap.Size.X.Offset > 0 then
+                                searchPress = nil
+                                searchLostDuringPress = false
+                                if searchOpen then
                                         closeSearch()
                                 else
                                         openSearch()
                                 end
                         end)
                         searchBox:GetPropertyChangedSignal("Text"):Connect(function()
-                                applyFilter(searchBox.Text)
+                                if searchOpen then applyFilter(searchBox.Text) end
                         end)
                         searchBox.FocusLost:Connect(function()
-                                closeSearch()
+                                local generation = searchGeneration
+                                task.defer(function()
+                                        if not searchOpen or generation ~= searchGeneration or searchBox:IsFocused() then return end
+                                        if searchPress then
+                                                searchLostDuringPress = true
+                                        else
+                                                closeSearch()
+                                        end
+                                end)
                         end)
 
                         local disabledRows = setmetatable({}, { __mode = "k" })
