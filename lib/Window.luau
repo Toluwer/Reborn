@@ -1,4 +1,4 @@
-return function(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle, createInput)
+return function(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle, createInput, createComponentContext, bindKeybinds, createTooltip)
     local DEFAULT_THEME = Theme.Default
     local F = Theme.Fonts
     local GEO = Theme.Geometry
@@ -696,162 +696,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             end)
         end)
 
-        local disabledRows = setmetatable({}, { __mode = "k" })
-
-        local function setRowDim(row, face, d)
-            disabledRows[row] = d or nil
-            killTween(face, "BackgroundColor3")
-            face.BackgroundColor3 = theme.Overlay
-            face.BackgroundTransparency = d and 0.3 or 0
-        end
-
-        local function makeRow(section, h, w)
-            local row = New("Frame", {
-                Size = w and UDim2.new(w.Scale, w.Offset, 0, h) or UDim2.new(1, 0, 0, h),
-                BackgroundTransparency = 1,
-                BorderSizePixel = 0,
-                ZIndex = 1,
-                Parent = section.Rows,
-            })
-            corner(row, 6)
-            local face = New("Frame", {
-                Position = UDim2.new(0, 0, 0, 0),
-                Size = UDim2.new(1, 0, 1, 0),
-                BackgroundColor3 = theme.Overlay,
-                BorderSizePixel = 0,
-                Parent = row,
-            })
-            corner(face, 6)
-            row.MouseEnter:Connect(function()
-                if disabledRows[row] then return end
-                tween(face, 0.12, { BackgroundColor3 = theme.RowHover })
-            end)
-            row.MouseLeave:Connect(function()
-                tween(face, 0.12, { BackgroundColor3 = theme.Overlay })
-            end)
-            return row, face
-        end
-
-        local function rowLabel(row, text, clear)
-            local lbl = New("TextLabel", {
-                AnchorPoint = Vector2.new(0, 0.5),
-                Position = UDim2.new(0, GEO.RowPad, 0.5, 0),
-                Size = UDim2.new(1, -(GEO.RowPad + (clear or 60)), 0, 16),
-                BackgroundTransparency = 1,
-                FontFace = F.Medium,
-                TextSize = 13,
-                TextColor3 = theme.Text,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                TextTruncate = Enum.TextTruncate.AtEnd,
-                Text = tostring(text or ""),
-                ZIndex = 5,
-                Parent = row,
-            })
-            return lbl
-        end
-
-        local function overlayBtn(row)
-            return New("TextButton", {
-                Size = UDim2.new(1, 0, 1, 0),
-                BackgroundTransparency = 1,
-                Text = "",
-                AutoButtonColor = false,
-                ZIndex = 10,
-                Parent = row,
-            })
-        end
-
-        local tipWrap = New("Frame", {
-            Size = UDim2.new(0, 0, 0, 28),
-            BackgroundTransparency = 1,
-            BorderSizePixel = 0,
-            Visible = false,
-            ZIndex = 60,
-            Parent = gui,
-        })
-        corner(tipWrap, 6)
-        local tipFace = New("Frame", {
-            Position = UDim2.new(0, 0, 0, 0),
-            Size = UDim2.new(1, 0, 1, 0),
-            BackgroundColor3 = theme.Overlay,
-            BorderSizePixel = 0,
-            Parent = tipWrap,
-        })
-        corner(tipFace, 6)
-        local tipTxt = New("TextLabel", {
-            Position = UDim2.new(0, 10, 0, 0),
-            Size = UDim2.new(1, -20, 1, 0),
-            BackgroundTransparency = 1,
-            FontFace = F.Regular,
-            TextSize = 12,
-            TextColor3 = theme.TextMuted,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            TextTruncate = Enum.TextTruncate.AtEnd,
-            Text = "",
-            Parent = tipFace,
-        })
-
-        local tipState = { gen = 0, armed = false }
-        local function hideTip()
-            tipState.gen = tipState.gen + 1
-            if not tipState.armed then return end
-            tipState.armed = false
-            tween(tipFace, 0.1, { BackgroundTransparency = 1 })
-            local exit = tween(tipTxt, 0.1, { TextTransparency = 1 })
-            completed(exit, function()
-                if not tipState.armed and tipWrap.Parent and not state.destroyed then tipWrap.Visible = false end
-            end)
-        end
-        local function showTip(text, row)
-            local clean = tostring(text or "")
-            if clean == "" then return end
-            local rp, rs = row.AbsolutePosition, row.AbsoluteSize
-            local vy = viewportSize()
-            local generation = tipState.gen
-            local tw = clamp(measureText(clean, 12, F.Regular) + 22, 44, 320)
-            if generation ~= tipState.gen or state.destroyed or state.closed or state.min or not row.Parent then return end
-            local x = rp.X + rs.X + 12
-            if x + tw > vy.X - 10 then x = rp.X - 12 - tw end
-            if x < 10 then x = 10 end
-            local cy = clamp(rp.Y + rs.Y / 2, 22, vy.Y - 22)
-            killTween(tipFace, "BackgroundTransparency")
-            killTween(tipTxt, "TextTransparency")
-            killTween(tipWrap, "Position")
-            tipTxt.Text = clean
-            tipWrap.Size = UDim2.new(0, tw, 0, 28)
-            tipWrap.Position = UDim2.new(0, x, 0, cy + 4)
-            tipWrap.Rotation = 0
-            tipWrap.Visible = true
-            tipFace.BackgroundTransparency = 0
-            tipTxt.TextTransparency = 0
-            tween(tipWrap, 0.14, { Position = UDim2.new(0, x, 0, cy) }, Enum.EasingStyle.Quint)
-        end
-        local function tipHover(row, cfg, hosts)
-            for _, host in ipairs(hosts) do
-                host.MouseEnter:Connect(function()
-                    if cfg.Tooltip and tostring(cfg.Tooltip) ~= "" then
-                        tipState.gen = tipState.gen + 1
-                        local gen = tipState.gen
-                        task.delay(0.55, function()
-                            if tipState.gen ~= gen or state.destroyed or state.closed or state.min or not row.Parent then return end
-                            local ancestor = row
-                            while ancestor and ancestor ~= gui do
-                                if ancestor:IsA("GuiObject") and not ancestor.Visible then return end
-                                ancestor = ancestor.Parent
-                            end
-                            if ancestor ~= gui then return end
-                            tipState.armed = true
-                            showTip(cfg.Tooltip, row)
-                        end)
-                    end
-                end)
-                host.MouseLeave:Connect(function()
-                    tipState.gen = tipState.gen + 1
-                    hideTip()
-                end)
-            end
-        end
-
+        local hideTip, tipHover, disposeTooltip = createTooltip(Core, Theme, theme, state, gui, viewportSize)
         lifecycle.SetTooltips(hideTip, tipHover)
         windowFrame:GetPropertyChangedSignal("Visible"):Connect(function()
             if not windowFrame.Visible then hideTip() end
@@ -1028,120 +873,15 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
 
         closeBtn.Activated:Connect(showConfirm)
 
-        local context = {
-            F = F,
-            GEO = GEO,
-            MOUSE_NAMES = MOUSE_NAMES,
-            New = New,
-            TweenService = TweenService,
-            UserInputService = UserInputService,
-            input = inputRouter,
-            clamp = clamp,
-            closeAllPops = closeAllPops,
-            colorToHex = colorToHex,
-            connect = lifecycle.Connect,
-            corner = corner,
-            finishElement = lifecycle.Finish,
-            fmtNum = fmtNum,
-            hexToColor = hexToColor,
-            icon = icon,
-            killTween = killTween,
-            completed = completed,
-            list = list,
-            makeRow = makeRow,
-            measureText = measureText,
-            mountPop = popovers.Mount,
-            nextOrder = nextOrder,
-            normCfg = normCfg,
-            overlayBtn = overlayBtn,
-            padding = padding,
-            registerPop = popovers.Register,
-            registerSearch = lifecycle.RegisterSearch,
-            rnd = rnd,
-            rowLabel = rowLabel,
-            setRowDim = setRowDim,
-            state = state,
-            theme = theme,
-            toWidth = toWidth,
-            tween = tween,
-            unregisterPop = popovers.Unregister,
-        }
-
-        context.addToggle = Components.Toggle(context)
-        context.addSlider = Components.Slider(context)
-        context.addDropdown = Components.Dropdown(context)
-        context.addKeybind = Components.Keybind(context)
-        context.addColorPicker = Components.ColorPicker(context)
-        context.addInput = Components.Input(context)
-        context.addButton = Components.Button(context)
-        context.addParagraph = Components.Paragraph(context)
-        context.addImage = Components.Image(context)
-        context.addList = Components.List(context)
-        context.addRowContainer = Components.Row(context)
+        local context = createComponentContext(Core, Theme, Icons, Components, state, theme, inputRouter, lifecycle, popovers)
 
         local addTab = createNavigation(context, tabsHolder, content, popovers)
 
-        local function matchesKeybind(keybind, input)
-            return (keybind.KeyCode ~= nil and keybind.KeyCode ~= Enum.KeyCode.None and input.KeyCode == keybind.KeyCode)
-                or (keybind.UserInputType ~= nil and input.UserInputType == keybind.UserInputType)
-        end
-
-        inputRouter.OnBegan(function(input, gameProcessed)
-            if state.destroyed then return end
-            if state.listening and input.UserInputType == Enum.UserInputType.Keyboard then
-                if input.KeyCode == Enum.KeyCode.Escape then
-                    state.listening._cancel()
-                elseif input.KeyCode == Enum.KeyCode.Backspace then
-                    state.listening._commit("None", nil, nil)
-                else
-                    state.listening._commit(keyDisplayName(input.KeyCode.Name), input.KeyCode, nil)
-                end
-                return
-            end
-            if not gameProcessed then
-                for _, kb in ipairs(table.clone(state.keybinds)) do
-                    if state.destroyed then return end
-                    if matchesKeybind(kb, input) and kb.Callback then
-                        if kb.Mode == "Toggle" then
-                            kb.Active = not kb.Active
-                            kb.Callback(kb.Active, kb.Name, input, gameProcessed)
-                        elseif kb.Mode == "Hold" then
-                            if not kb.Active then
-                                kb.Active = true
-                                kb.Callback(true, kb.Name, input, gameProcessed)
-                            end
-                        else
-                            kb.Callback(kb.Name, input, gameProcessed)
-                        end
-                    end
-                end
-            end
-            if state.destroyed then return end
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                local m = Vector2.new(input.Position.X, input.Position.Y)
-                popovers.CloseOutside(m)
-                if state.listening and not gameProcessed then
-                    local chip = state.listening._chip
-                    if chip == nil or not popovers.Contains(chip, m) then
-                        state.listening._cancel()
-                    end
-                end
-            end
-            if input.KeyCode == Enum.KeyCode.Escape then
-                if confirmActive then
-                    hideConfirm()
-                else
-                    closeAllPops()
-                end
-            end
-        end)
-        inputRouter.OnEnded(function(input, gameProcessed)
-            for _, kb in ipairs(table.clone(state.keybinds)) do
-                if state.destroyed then return end
-                if kb.Mode == "Hold" and kb.Active and kb.Callback and matchesKeybind(kb, input) then
-                    kb.Active = false
-                    kb.Callback(false, kb.Name, input, gameProcessed)
-                end
+        bindKeybinds(Core, state, inputRouter, popovers, function()
+            if confirmActive then
+                hideConfirm()
+            else
+                closeAllPops()
             end
         end)
 
@@ -1202,7 +942,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             state.destroyed = true
             state.closed = true
             state.min = false
-            tipState.gen = tipState.gen + 1
+            disposeTooltip()
             inputRouter.Destroy()
             for _, connection in ipairs(conns) do
                 connection:Disconnect()

@@ -51,6 +51,29 @@ Section:Button({
 
 Use `Reborn:Unload()` to unload the library.
 
+## Widgets
+
+```lua
+local Widget = Reborn:CreateWidget({
+    Title = "Controls",
+    Width = 260,
+    Position = Vector2.new(24, 80),
+})
+
+Widget:Toggle({ Text = "Enabled", Value = true })
+Widget:Slider({ Text = "Intensity", Min = 0, Max = 100, Value = 65 })
+```
+
+Widgets support all components directly, with no tabs or sections. Multiple widgets can be open at once. The header collapses the widget; closing destroys it without confirmation.
+
+Options: `Title`, `Id`, `Width`, `MinWidth`, `MaxWidth`, `MaxHeight`, `Position` (Vector2), `Resizable`, `Theme`, `Parent`, `OnClose`.
+
+Methods: `SetCollapsed(bool)`, `ToggleCollapsed()`, `Minimize()`, `SetVisible(bool)`, `SetTitle(text)`, `SetPosition(Vector2)`, `SetWidth(number)`, `Notify(config)`, `Close()`, `Destroy()`.
+
+Use `AddCleanup(function)` to release external connections or tasks when a widget closes. Configuration methods work per widget, using its `Id` or initial title.
+
+[Widget example](examples/widgets.luau)
+
 ## Tabs and sections
 
 ```lua

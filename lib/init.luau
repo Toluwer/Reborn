@@ -9,6 +9,10 @@ local createNavigation = require(script.Navigation)
 local createPopovers = require(script.Popovers)
 local createLifecycle = require(script.Lifecycle)
 local createInput = require(script.InputRouter)
+local createComponentContext = require(script.ComponentContext)
+local bindKeybinds = require(script.Keybinds)
+local createWidget = require(script.Widget)
+local createTooltip = require(script.Tooltip)
 
 local Components = {
     Toggle = require(script.Components.Toggle),
@@ -28,6 +32,7 @@ local Reborn = {
     Version = "0.9.8",
     NotificationsEnabled = true,
     _windows = {},
+    _widgets = {},
     _configs = {},
 }
 
@@ -35,9 +40,14 @@ Reborn.Theme = Theme.Default
 local Core = createCore(Theme, createAnimation)
 local Icons = createIcons(Core)
 local Notifications = createNotifications(Reborn, Core, Theme, Icons)
-createWindow(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle, createInput)
+createWindow(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle, createInput, createComponentContext, bindKeybinds, createTooltip)
+createWidget(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createPopovers, createLifecycle, createInput, createComponentContext, bindKeybinds, createTooltip)
 
 function Reborn:Unload()
+    for _, widget in ipairs(table.clone(self._widgets)) do
+        pcall(function() widget:Destroy() end)
+    end
+    table.clear(self._widgets)
     for i = #self._windows, 1, -1 do
         pcall(function() self._windows[i]:Destroy() end)
     end

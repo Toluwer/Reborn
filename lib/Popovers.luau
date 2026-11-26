@@ -1,4 +1,4 @@
-return function(Core, Theme, state, gui, windowFrame, connect)
+return function(Core, Theme, state, gui, windowFrame, connect, viewportBounds)
     local GEO = Theme.Geometry
     local killTween = Core.killTween
     local open = state.openPops
@@ -64,6 +64,12 @@ return function(Core, Theme, state, gui, windowFrame, connect)
         local wp = windowFrame.AbsolutePosition
         local wb = wp.Y + windowFrame.AbsoluteSize.Y
         local topMin = wp.Y + GEO.Header + 8
+        local viewport = viewportBounds and viewportBounds()
+        if viewport then
+            topMin = 8
+            wb = viewport.Y
+            popW = math.min(popW, math.max(1, viewport.X - 16))
+        end
         local capH = (wb - 8) - topMin
         if capH > 0 and popH > capH then popH = capH end
         local x = alignRight and (rp.X + rs.X - GEO.RowPad - popW) or rp.X
@@ -73,6 +79,10 @@ return function(Core, Theme, state, gui, windowFrame, connect)
             if y < topMin then
                 y = topMin
             end
+        end
+        if viewport then
+            x = math.clamp(x, 8, math.max(8, viewport.X - popW - 8))
+            y = math.clamp(y, topMin, math.max(topMin, wb - popH - 8))
         end
         pop.Parent = gui
         pop.ZIndex = 45
