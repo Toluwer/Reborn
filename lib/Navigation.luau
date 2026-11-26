@@ -11,6 +11,7 @@ return function(context, tabsHolder, content, popovers)
     local icon = context.icon
     local tween = context.tween
     local killTween = context.killTween
+    local completed = context.completed
     local normCfg = context.normCfg
     local addToggle = context.addToggle
     local addSlider = context.addSlider
@@ -169,8 +170,8 @@ return function(context, tabsHolder, content, popovers)
         local duration = reversing and math.max(0.12, 0.28 * math.abs(incoming.Position.X.Scale)) or 0.28
         tween(outgoing, duration, { Position = UDim2.new(-direction, 0, 0, 0) }, Enum.EasingStyle.Quart)
         local arrival = tween(incoming, duration, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Quart)
-        arrival.Completed:Once(function(playback)
-            if playback ~= Enum.PlaybackState.Completed or generation ~= tabGeneration or state.destroyed or not incoming.Parent then return end
+        completed(arrival, function()
+            if generation ~= tabGeneration or state.destroyed or not incoming.Parent then return end
             outgoing.Visible = false
             previous.Page.Visible = false
             outgoing.Position = UDim2.new(0, 0, 0, 0)

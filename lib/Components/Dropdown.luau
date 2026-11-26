@@ -5,6 +5,7 @@ return function(ctx)
     local corner = ctx.corner
     local list = ctx.list
     local tween = ctx.tween
+    local completed = ctx.completed
     local measureText = ctx.measureText
     local theme = ctx.theme
     local GEO = ctx.GEO
@@ -188,8 +189,8 @@ return function(ctx)
                 local pos = pop.Position
                 local offset = pos.Y.Offset < row.AbsolutePosition.Y and 6 or -6
                 tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + offset) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-                tween(pop, 0.15, { GroupTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-                task.delay(0.16, function()
+                local exit = tween(pop, 0.15, { GroupTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+                completed(exit, function()
                     if generation == transition and not dd._open and pop.Parent then pop.Visible = false end
                 end)
                 tween(chev, 0.17, { Rotation = 0 }, Enum.EasingStyle.Quart)

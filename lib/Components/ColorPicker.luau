@@ -7,6 +7,7 @@ return function(ctx)
     local corner = ctx.corner
     local padding = ctx.padding
     local tween = ctx.tween
+    local completed = ctx.completed
     local measureText = ctx.measureText
     local colorToHex = ctx.colorToHex
     local hexToColor = ctx.hexToColor
@@ -306,8 +307,8 @@ return function(ctx)
                 local pos = pop.Position
                 tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + direction * 4) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
                 local exit = tween(pop, 0.15, { GroupTransparency = 1 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-                exit.Completed:Once(function(playback)
-                    if playback == Enum.PlaybackState.Completed and generation == transition and not open and pop.Parent then
+                completed(exit, function()
+                    if generation == transition and not open and pop.Parent then
                         pop.Visible = false
                     end
                 end)

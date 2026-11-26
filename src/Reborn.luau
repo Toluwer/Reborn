@@ -78,8 +78,80 @@ local Theme = (function()
     return { Default = DEFAULT_THEME, Fonts = F, Geometry = GEO }
 end)()
 
+local createAnimation = (function()
+    return function(TweenService)
+        local liveTweens = setmetatable({}, { __mode = "k" })
+
+        local function detachTween(registry, animation)
+            for property, current in pairs(registry) do
+                if current == animation then registry[property] = nil end
+            end
+        end
+
+        local function tween(instance, duration, properties, style, direction)
+            local registry = liveTweens[instance] or {}
+            local conflicts = {}
+            for property in pairs(properties) do
+                local previous = registry[property]
+                if previous then conflicts[previous] = true end
+            end
+            for previous in pairs(conflicts) do
+                detachTween(registry, previous)
+                previous:Cancel()
+            end
+
+            local animation = TweenService:Create(instance, TweenInfo.new(
+                duration,
+                style or Enum.EasingStyle.Quad,
+                direction or Enum.EasingDirection.Out
+            ), properties)
+
+            liveTweens[instance] = registry
+            for property in pairs(properties) do
+                registry[property] = animation
+            end
+
+            animation.Completed:Once(function()
+                detachTween(registry, animation)
+                if next(registry) == nil and liveTweens[instance] == registry then
+                    liveTweens[instance] = nil
+                end
+            end)
+            animation:Play()
+            return animation
+        end
+
+        local function killTween(instance, property)
+            local registry = liveTweens[instance]
+            if not registry then return end
+            local animation = registry[property]
+            if not animation then return end
+
+            detachTween(registry, animation)
+            animation:Cancel()
+        end
+
+        local function completed(animation, callback)
+            if animation.PlaybackState == Enum.PlaybackState.Completed then
+                callback()
+                return
+            end
+            if animation.PlaybackState == Enum.PlaybackState.Cancelled then return end
+            animation.Completed:Once(function(playback)
+                if playback == Enum.PlaybackState.Completed then callback() end
+            end)
+        end
+
+        return {
+            Tween = tween,
+            Cancel = killTween,
+            Completed = completed,
+        }
+    end
+end)()
+
 local createCore = (function()
-    return function(Theme)
+    return function(Theme, createAnimation)
         local F = Theme.Fonts
 
         local TweenService = game:GetService("TweenService")
@@ -135,56 +207,9 @@ local createCore = (function()
             })
         end
 
-        local liveTweens = setmetatable({}, { __mode = "k" })
-
-        local function detachTween(registry, animation)
-            for property, current in pairs(registry) do
-                if current == animation then registry[property] = nil end
-            end
-        end
-
-        local function tween(instance, duration, properties, style, direction)
-            local registry = liveTweens[instance] or {}
-            local conflicts = {}
-            for property in pairs(properties) do
-                local previous = registry[property]
-                if previous then conflicts[previous] = true end
-            end
-            for previous in pairs(conflicts) do
-                detachTween(registry, previous)
-                previous:Cancel()
-            end
-
-            local animation = TweenService:Create(instance, TweenInfo.new(
-                duration,
-                style or Enum.EasingStyle.Quad,
-                direction or Enum.EasingDirection.Out
-            ), properties)
-
-            liveTweens[instance] = registry
-            for property in pairs(properties) do
-                registry[property] = animation
-            end
-
-            animation.Completed:Once(function()
-                detachTween(registry, animation)
-                if next(registry) == nil and liveTweens[instance] == registry then
-                    liveTweens[instance] = nil
-                end
-            end)
-            animation:Play()
-            return animation
-        end
-
-        local function killTween(instance, property)
-            local registry = liveTweens[instance]
-            if not registry then return end
-            local animation = registry[property]
-            if not animation then return end
-
-            detachTween(registry, animation)
-            animation:Cancel()
-        end
+        local motion = createAnimation(TweenService)
+        local tween = motion.Tween
+        local killTween = motion.Cancel
 
         local textCache = {}
         local textCacheCount = 0
@@ -359,6 +384,7 @@ local createCore = (function()
             list = list,
             tween = tween,
             killTween = killTween,
+            completed = motion.Completed,
             measureText = measureText,
             colorToHex = colorToHex,
             hexToColor = hexToColor,
@@ -549,6 +575,8 @@ local createNotifications = (function()
         local corner = Core.corner
         local padding = Core.padding
         local tween = Core.tween
+        local killTween = Core.killTween
+        local completed = Core.completed
         local measureText = Core.measureText
         local resolveParent = Core.resolveParent
         local MARK = Core.MARK
@@ -591,6 +619,7 @@ local createNotifications = (function()
                     if animate then
                         tween(item.toast, 0.18, { Position = UDim2.new(0, 0, 0, y) })
                     else
+                        killTween(item.toast, "Position")
                         item.toast.Position = UDim2.new(0, 0, 0, y)
                     end
                     y = y + h + 8
@@ -604,9 +633,9 @@ local createNotifications = (function()
                 for i, it in ipairs(state.items) do
                     if it == item then table.remove(state.items, i) break end
                 end
-                tween(item.toast, 0.22, { Position = UDim2.new(0, GEO.ToastW + 18, 0, item.toast.Position.Y.Offset) })
-                task.delay(0.24, function()
-                    if item.toast then item.toast:Destroy() end
+                local exit = tween(item.toast, 0.22, { Position = UDim2.new(0, GEO.ToastW + 18, 0, item.toast.Position.Y.Offset) })
+                completed(exit, function()
+                    if item.toast.Parent then item.toast:Destroy() end
                 end)
                 relayout(true)
             end
@@ -970,6 +999,7 @@ local createNavigation = (function()
         local icon = context.icon
         local tween = context.tween
         local killTween = context.killTween
+        local completed = context.completed
         local normCfg = context.normCfg
         local addToggle = context.addToggle
         local addSlider = context.addSlider
@@ -1128,8 +1158,8 @@ local createNavigation = (function()
             local duration = reversing and math.max(0.12, 0.28 * math.abs(incoming.Position.X.Scale)) or 0.28
             tween(outgoing, duration, { Position = UDim2.new(-direction, 0, 0, 0) }, Enum.EasingStyle.Quart)
             local arrival = tween(incoming, duration, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Quart)
-            arrival.Completed:Once(function(playback)
-                if playback ~= Enum.PlaybackState.Completed or generation ~= tabGeneration or state.destroyed or not incoming.Parent then return end
+            completed(arrival, function()
+                if generation ~= tabGeneration or state.destroyed or not incoming.Parent then return end
                 outgoing.Visible = false
                 previous.Page.Visible = false
                 outgoing.Position = UDim2.new(0, 0, 0, 0)
@@ -1770,6 +1800,7 @@ local createWindow = (function()
         local list = Core.list
         local tween = Core.tween
         local killTween = Core.killTween
+        local completed = Core.completed
         local measureText = Core.measureText
         local colorToHex = Core.colorToHex
         local hexToColor = Core.hexToColor
@@ -1876,7 +1907,7 @@ local createWindow = (function()
             local faceCorner = corner(windowFace, GEO.WindowRadius - 1)
 
             local function recenter()
-                if state.dragged or state.closed or state.min then return end
+                if state.dragged or state.closed or state.min or state.restoring then return end
                 killTween(windowFrame, "Position")
                 local v = viewportSize()
                 windowFrame.Position = UDim2.new(0, rnd(v.X / 2 - W / 2), 0, rnd(v.Y / 2 - H / 2))
@@ -2122,6 +2153,10 @@ local createWindow = (function()
             })
             local pillClear = false
             local function snapPillRest()
+                killTween(pill, "Size")
+                killTween(pillContent, "Size")
+                killTween(pillHint, "TextTransparency")
+                killTween(pill, "BackgroundColor3")
                 pill.Size = UDim2.new(0, pillRestW, 0, GEO.PillH)
                 pillContent.Size = UDim2.new(0, pillRestW, 1, 0)
                 pillHint.TextTransparency = 1
@@ -2147,7 +2182,7 @@ local createWindow = (function()
             local toastLayer = buildToastLayer(gui, theme)
 
             dragZone.InputBegan:Connect(function(input)
-                if state.closed or state.min or not inputRouter.IsPointer(input) then return end
+                if state.closed or state.min or state.restoring or not inputRouter.IsPointer(input) then return end
                 local start = input.Position
                 local origin = windowFrame.Position
                 if not inputRouter.Begin(windowFrame, input, function(movement)
@@ -2186,7 +2221,7 @@ local createWindow = (function()
                 tween(gripIcon, 0.12, { ImageColor3 = theme.TextFaint })
             end)
             grip.InputBegan:Connect(function(input)
-                if state.closed or state.min or not inputRouter.IsPointer(input) then return end
+                if state.closed or state.min or state.restoring or not inputRouter.IsPointer(input) then return end
                 local start = input.Position
                 local width, height = W, H
                 if not inputRouter.Begin(grip, input, function(movement)
@@ -2202,11 +2237,18 @@ local createWindow = (function()
                 killTween(windowFrame, "Size")
             end)
 
+            local morphGeneration = 0
             local function setMinimized(m)
-                if state.min == m then return end
+                if state.destroyed or state.min == m then return end
                 if m and state.closed then return end
+                morphGeneration = morphGeneration + 1
+                local generation = morphGeneration
+                local wasRestoring = state.restoring
+                state.restoring = not m
                 state.min = m
                 if m then
+                    killTween(windowFrame, "GroupTransparency")
+                    windowFrame.GroupTransparency = 0
                     inputRouter.Cancel()
                     closeAllPops()
                     if searchWrap.Size.X.Offset > 0 then closeSearch() end
@@ -2215,20 +2257,22 @@ local createWindow = (function()
                     bodyGroup.Visible = false
                     minIcon.Visible = false
                     plusIcon.Visible = true
-                    state.minPos = { x = windowFrame.Position.X.Offset, y = windowFrame.Position.Y.Offset }
+                    if not wasRestoring or not state.minPos then
+                        state.minPos = { x = windowFrame.Position.X.Offset, y = windowFrame.Position.Y.Offset }
+                    end
                     killTween(windowFrame, "Position")
                     killTween(windowFrame, "Size")
                     local v = viewportSize()
                     local tw = pillRestW + 2
-                    tween(windowFrame, 0.36, {
+                    local morph = tween(windowFrame, 0.36, {
                         Size = UDim2.new(0, tw, 0, GEO.PillH + 2),
                         Position = UDim2.new(0, rnd(v.X / 2 - tw / 2), 0, 13),
                     }, Enum.EasingStyle.Quint)
                     tween(winCorner, 0.36, { CornerRadius = UDim.new(0, GEO.PillH / 2 + 1) }, Enum.EasingStyle.Quint)
                     tween(faceCorner, 0.36, { CornerRadius = UDim.new(0, GEO.PillH / 2) }, Enum.EasingStyle.Quint)
                     tween(windowFrame, 0.24, { BackgroundColor3 = theme.Surface })
-                    task.delay(0.38, function()
-                        if state.min then
+                    completed(morph, function()
+                        if generation == morphGeneration and state.min and not state.destroyed and windowFrame.Parent then
                             windowFrame.Visible = false
                             snapPillRest()
                             pill.Visible = true
@@ -2257,20 +2301,27 @@ local createWindow = (function()
                     else
                         tx, ty = rnd(v.X / 2 - W / 2), rnd(v.Y / 2 - H / 2)
                     end
-                    tween(windowFrame, 0.34, { Size = UDim2.new(0, W, 0, H), Position = UDim2.new(0, tx, 0, ty) }, Enum.EasingStyle.Quint)
+                    local restore = tween(windowFrame, 0.34, { Size = UDim2.new(0, W, 0, H), Position = UDim2.new(0, tx, 0, ty) }, Enum.EasingStyle.Quint)
                     tween(winCorner, 0.34, { CornerRadius = UDim.new(0, GEO.WindowRadius) }, Enum.EasingStyle.Quint)
                     tween(faceCorner, 0.34, { CornerRadius = UDim.new(0, GEO.WindowRadius - 1) }, Enum.EasingStyle.Quint)
                     tween(windowFrame, 0.3, { BackgroundColor3 = theme.Surface })
+                    completed(restore, function()
+                        if generation == morphGeneration and not state.destroyed then
+                            state.restoring = false
+                        end
+                    end)
                 end
             end
 
             local function closeWindow()
-                if state.closed then return end
+                if state.closed or state.destroyed then return end
                 state.closed = true
+                morphGeneration = morphGeneration + 1
                 inputRouter.Cancel()
                 closeAllPops()
-                if state.min then
+                if state.min or state.restoring then
                     state.min = false
+                    state.restoring = false
                     pill.Visible = false
                     grip.Visible = true
                     header.Visible = true
@@ -2299,8 +2350,8 @@ local createWindow = (function()
                     return
                 end
                 local exit = tween(windowFrame, 0.20, { GroupTransparency = 1 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-                exit.Completed:Once(function(playback)
-                    if playback == Enum.PlaybackState.Completed and state.closed and state.closeGeneration == generation and windowFrame.Parent then
+                completed(exit, function()
+                    if state.closed and state.closeGeneration == generation and not state.destroyed and windowFrame.Parent then
                         windowFrame.Visible = false
                     end
                 end)
@@ -2343,7 +2394,7 @@ local createWindow = (function()
             end)
 
             local function reopen()
-                if not state.closed or state.unloading then return end
+                if not state.closed or state.unloading or state.destroyed then return end
                 state.closed = false
                 if state.min then setMinimized(false) end
                 closeAllPops()
@@ -2380,8 +2431,8 @@ local createWindow = (function()
                 applyFilter("")
                 tween(searchBox, 0.12, { TextTransparency = 1 }, Enum.EasingStyle.Sine)
                 local exit = tween(searchWrap, 0.19, { Size = UDim2.new(0, 0, 0, GEO.SearchH) }, Enum.EasingStyle.Quart, Enum.EasingDirection.InOut)
-                exit.Completed:Once(function(playback)
-                    if playback == Enum.PlaybackState.Completed and generation == searchGeneration and not searchOpen and searchWrap.Parent then
+                completed(exit, function()
+                    if generation == searchGeneration and not searchOpen and not state.destroyed and searchWrap.Parent then
                         searchWrap.Visible = false
                         searchBox.Text = ""
                     end
@@ -2531,9 +2582,9 @@ local createWindow = (function()
                 tipState.armed = false
                 local gen = tipState.gen
                 tween(tipFace, 0.1, { BackgroundTransparency = 1 })
-                tween(tipTxt, 0.1, { TextTransparency = 1 })
-                task.delay(0.12, function()
-                    if tipState.gen == gen and tipWrap.Parent then tipWrap.Visible = false end
+                local exit = tween(tipTxt, 0.1, { TextTransparency = 1 })
+                completed(exit, function()
+                    if tipState.gen == gen and tipWrap.Parent and not state.destroyed then tipWrap.Visible = false end
                 end)
             end
             local function showTip(text, row)
@@ -2546,6 +2597,9 @@ local createWindow = (function()
                 if x + tw > vy.X - 10 then x = rp.X - 12 - tw end
                 if x < 10 then x = 10 end
                 local cy = clamp(rp.Y + rs.Y / 2, 22, vy.Y - 22)
+                killTween(tipFace, "BackgroundTransparency")
+                killTween(tipTxt, "TextTransparency")
+                killTween(tipWrap, "Position")
                 tipTxt.Text = clean
                 tipWrap.Size = UDim2.new(0, tw, 0, 28)
                 tipWrap.Position = UDim2.new(0, x, 0, cy + 4)
@@ -2581,15 +2635,18 @@ local createWindow = (function()
             dragZone.InputBegan:Connect(function() closeAllPops() end)
 
             local confirmActive = false
+            local confirmGeneration = 0
             local scrim, card
 
             local function hideConfirm()
                 if not confirmActive or state.unloading then return end
                 confirmActive = false
+                confirmGeneration = confirmGeneration + 1
+                local generation = confirmGeneration
                 tween(scrim, 0.15, { BackgroundTransparency = 1 })
-                tween(card, 0.15, { Position = UDim2.new(0.5, 0, 0.5, 8), GroupTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-                task.delay(0.2, function()
-                    if not confirmActive then
+                local exit = tween(card, 0.15, { Position = UDim2.new(0.5, 0, 0.5, 8), GroupTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+                completed(exit, function()
+                    if generation == confirmGeneration and not confirmActive and not state.destroyed and card.Parent then
                         card.Visible = false
                         scrim.Visible = false
                     end
@@ -2728,12 +2785,15 @@ local createWindow = (function()
                     closeB.Activated:Connect(unloadNow)
                 end
                 confirmActive = true
+                confirmGeneration = confirmGeneration + 1
                 card.Size = UDim2.new(0, math.min(420, W - 48), 0, 156)
+                if not card.Visible then
+                    scrim.BackgroundTransparency = 1
+                    card.Position = UDim2.new(0.5, 0, 0.5, 8)
+                    card.GroupTransparency = 1
+                end
                 scrim.Visible = true
                 card.Visible = true
-                scrim.BackgroundTransparency = 1
-                card.Position = UDim2.new(0.5, 0, 0.5, 8)
-                card.GroupTransparency = 1
                 tween(scrim, 0.20, { BackgroundTransparency = 0.42 })
                 tween(card, 0.23, { Position = UDim2.new(0.5, 0, 0.5, 0), GroupTransparency = 0 }, Enum.EasingStyle.Quart)
             end
@@ -2758,6 +2818,7 @@ local createWindow = (function()
                 hexToColor = hexToColor,
                 icon = icon,
                 killTween = killTween,
+                completed = completed,
                 list = list,
                 makeRow = makeRow,
                 measureText = measureText,
@@ -3233,6 +3294,7 @@ Components.Dropdown = (function()
         local corner = ctx.corner
         local list = ctx.list
         local tween = ctx.tween
+        local completed = ctx.completed
         local measureText = ctx.measureText
         local theme = ctx.theme
         local GEO = ctx.GEO
@@ -3416,8 +3478,8 @@ Components.Dropdown = (function()
                     local pos = pop.Position
                     local offset = pos.Y.Offset < row.AbsolutePosition.Y and 6 or -6
                     tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + offset) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-                    tween(pop, 0.15, { GroupTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-                    task.delay(0.16, function()
+                    local exit = tween(pop, 0.15, { GroupTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+                    completed(exit, function()
                         if generation == transition and not dd._open and pop.Parent then pop.Visible = false end
                     end)
                     tween(chev, 0.17, { Rotation = 0 }, Enum.EasingStyle.Quart)
@@ -3784,6 +3846,7 @@ Components.ColorPicker = (function()
         local corner = ctx.corner
         local padding = ctx.padding
         local tween = ctx.tween
+        local completed = ctx.completed
         local measureText = ctx.measureText
         local colorToHex = ctx.colorToHex
         local hexToColor = ctx.hexToColor
@@ -4083,8 +4146,8 @@ Components.ColorPicker = (function()
                     local pos = pop.Position
                     tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + direction * 4) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
                     local exit = tween(pop, 0.15, { GroupTransparency = 1 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-                    exit.Completed:Once(function(playback)
-                        if playback == Enum.PlaybackState.Completed and generation == transition and not open and pop.Parent then
+                    completed(exit, function()
+                        if generation == transition and not open and pop.Parent then
                             pop.Visible = false
                         end
                     end)
@@ -4904,7 +4967,7 @@ local Reborn = {
 }
 
 Reborn.Theme = Theme.Default
-local Core = createCore(Theme)
+local Core = createCore(Theme, createAnimation)
 local Icons = createIcons(Core)
 local Notifications = createNotifications(Reborn, Core, Theme, Icons)
 createWindow(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle, createInput)

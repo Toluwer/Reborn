@@ -7,6 +7,8 @@ return function(Reborn, Core, Theme, Icons)
     local corner = Core.corner
     local padding = Core.padding
     local tween = Core.tween
+    local killTween = Core.killTween
+    local completed = Core.completed
     local measureText = Core.measureText
     local resolveParent = Core.resolveParent
     local MARK = Core.MARK
@@ -49,6 +51,7 @@ return function(Reborn, Core, Theme, Icons)
                 if animate then
                     tween(item.toast, 0.18, { Position = UDim2.new(0, 0, 0, y) })
                 else
+                    killTween(item.toast, "Position")
                     item.toast.Position = UDim2.new(0, 0, 0, y)
                 end
                 y = y + h + 8
@@ -62,9 +65,9 @@ return function(Reborn, Core, Theme, Icons)
             for i, it in ipairs(state.items) do
                 if it == item then table.remove(state.items, i) break end
             end
-            tween(item.toast, 0.22, { Position = UDim2.new(0, GEO.ToastW + 18, 0, item.toast.Position.Y.Offset) })
-            task.delay(0.24, function()
-                if item.toast then item.toast:Destroy() end
+            local exit = tween(item.toast, 0.22, { Position = UDim2.new(0, GEO.ToastW + 18, 0, item.toast.Position.Y.Offset) })
+            completed(exit, function()
+                if item.toast.Parent then item.toast:Destroy() end
             end)
             relayout(true)
         end

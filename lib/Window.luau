@@ -16,6 +16,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
     local list = Core.list
     local tween = Core.tween
     local killTween = Core.killTween
+    local completed = Core.completed
     local measureText = Core.measureText
     local colorToHex = Core.colorToHex
     local hexToColor = Core.hexToColor
@@ -122,7 +123,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
         local faceCorner = corner(windowFace, GEO.WindowRadius - 1)
 
         local function recenter()
-            if state.dragged or state.closed or state.min then return end
+            if state.dragged or state.closed or state.min or state.restoring then return end
             killTween(windowFrame, "Position")
             local v = viewportSize()
             windowFrame.Position = UDim2.new(0, rnd(v.X / 2 - W / 2), 0, rnd(v.Y / 2 - H / 2))
@@ -368,6 +369,10 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
         })
         local pillClear = false
         local function snapPillRest()
+            killTween(pill, "Size")
+            killTween(pillContent, "Size")
+            killTween(pillHint, "TextTransparency")
+            killTween(pill, "BackgroundColor3")
             pill.Size = UDim2.new(0, pillRestW, 0, GEO.PillH)
             pillContent.Size = UDim2.new(0, pillRestW, 1, 0)
             pillHint.TextTransparency = 1
@@ -393,7 +398,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
         local toastLayer = buildToastLayer(gui, theme)
 
         dragZone.InputBegan:Connect(function(input)
-            if state.closed or state.min or not inputRouter.IsPointer(input) then return end
+            if state.closed or state.min or state.restoring or not inputRouter.IsPointer(input) then return end
             local start = input.Position
             local origin = windowFrame.Position
             if not inputRouter.Begin(windowFrame, input, function(movement)
@@ -432,7 +437,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             tween(gripIcon, 0.12, { ImageColor3 = theme.TextFaint })
         end)
         grip.InputBegan:Connect(function(input)
-            if state.closed or state.min or not inputRouter.IsPointer(input) then return end
+            if state.closed or state.min or state.restoring or not inputRouter.IsPointer(input) then return end
             local start = input.Position
             local width, height = W, H
             if not inputRouter.Begin(grip, input, function(movement)
@@ -448,11 +453,18 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             killTween(windowFrame, "Size")
         end)
 
+        local morphGeneration = 0
         local function setMinimized(m)
-            if state.min == m then return end
+            if state.destroyed or state.min == m then return end
             if m and state.closed then return end
+            morphGeneration = morphGeneration + 1
+            local generation = morphGeneration
+            local wasRestoring = state.restoring
+            state.restoring = not m
             state.min = m
             if m then
+                killTween(windowFrame, "GroupTransparency")
+                windowFrame.GroupTransparency = 0
                 inputRouter.Cancel()
                 closeAllPops()
                 if searchWrap.Size.X.Offset > 0 then closeSearch() end
@@ -461,20 +473,22 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
                 bodyGroup.Visible = false
                 minIcon.Visible = false
                 plusIcon.Visible = true
-                state.minPos = { x = windowFrame.Position.X.Offset, y = windowFrame.Position.Y.Offset }
+                if not wasRestoring or not state.minPos then
+                    state.minPos = { x = windowFrame.Position.X.Offset, y = windowFrame.Position.Y.Offset }
+                end
                 killTween(windowFrame, "Position")
                 killTween(windowFrame, "Size")
                 local v = viewportSize()
                 local tw = pillRestW + 2
-                tween(windowFrame, 0.36, {
+                local morph = tween(windowFrame, 0.36, {
                     Size = UDim2.new(0, tw, 0, GEO.PillH + 2),
                     Position = UDim2.new(0, rnd(v.X / 2 - tw / 2), 0, 13),
                 }, Enum.EasingStyle.Quint)
                 tween(winCorner, 0.36, { CornerRadius = UDim.new(0, GEO.PillH / 2 + 1) }, Enum.EasingStyle.Quint)
                 tween(faceCorner, 0.36, { CornerRadius = UDim.new(0, GEO.PillH / 2) }, Enum.EasingStyle.Quint)
                 tween(windowFrame, 0.24, { BackgroundColor3 = theme.Surface })
-                task.delay(0.38, function()
-                    if state.min then
+                completed(morph, function()
+                    if generation == morphGeneration and state.min and not state.destroyed and windowFrame.Parent then
                         windowFrame.Visible = false
                         snapPillRest()
                         pill.Visible = true
@@ -503,20 +517,27 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
                 else
                     tx, ty = rnd(v.X / 2 - W / 2), rnd(v.Y / 2 - H / 2)
                 end
-                tween(windowFrame, 0.34, { Size = UDim2.new(0, W, 0, H), Position = UDim2.new(0, tx, 0, ty) }, Enum.EasingStyle.Quint)
+                local restore = tween(windowFrame, 0.34, { Size = UDim2.new(0, W, 0, H), Position = UDim2.new(0, tx, 0, ty) }, Enum.EasingStyle.Quint)
                 tween(winCorner, 0.34, { CornerRadius = UDim.new(0, GEO.WindowRadius) }, Enum.EasingStyle.Quint)
                 tween(faceCorner, 0.34, { CornerRadius = UDim.new(0, GEO.WindowRadius - 1) }, Enum.EasingStyle.Quint)
                 tween(windowFrame, 0.3, { BackgroundColor3 = theme.Surface })
+                completed(restore, function()
+                    if generation == morphGeneration and not state.destroyed then
+                        state.restoring = false
+                    end
+                end)
             end
         end
 
         local function closeWindow()
-            if state.closed then return end
+            if state.closed or state.destroyed then return end
             state.closed = true
+            morphGeneration = morphGeneration + 1
             inputRouter.Cancel()
             closeAllPops()
-            if state.min then
+            if state.min or state.restoring then
                 state.min = false
+                state.restoring = false
                 pill.Visible = false
                 grip.Visible = true
                 header.Visible = true
@@ -545,8 +566,8 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
                 return
             end
             local exit = tween(windowFrame, 0.20, { GroupTransparency = 1 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-            exit.Completed:Once(function(playback)
-                if playback == Enum.PlaybackState.Completed and state.closed and state.closeGeneration == generation and windowFrame.Parent then
+            completed(exit, function()
+                if state.closed and state.closeGeneration == generation and not state.destroyed and windowFrame.Parent then
                     windowFrame.Visible = false
                 end
             end)
@@ -589,7 +610,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
         end)
 
         local function reopen()
-            if not state.closed or state.unloading then return end
+            if not state.closed or state.unloading or state.destroyed then return end
             state.closed = false
             if state.min then setMinimized(false) end
             closeAllPops()
@@ -626,8 +647,8 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             applyFilter("")
             tween(searchBox, 0.12, { TextTransparency = 1 }, Enum.EasingStyle.Sine)
             local exit = tween(searchWrap, 0.19, { Size = UDim2.new(0, 0, 0, GEO.SearchH) }, Enum.EasingStyle.Quart, Enum.EasingDirection.InOut)
-            exit.Completed:Once(function(playback)
-                if playback == Enum.PlaybackState.Completed and generation == searchGeneration and not searchOpen and searchWrap.Parent then
+            completed(exit, function()
+                if generation == searchGeneration and not searchOpen and not state.destroyed and searchWrap.Parent then
                     searchWrap.Visible = false
                     searchBox.Text = ""
                 end
@@ -777,9 +798,9 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             tipState.armed = false
             local gen = tipState.gen
             tween(tipFace, 0.1, { BackgroundTransparency = 1 })
-            tween(tipTxt, 0.1, { TextTransparency = 1 })
-            task.delay(0.12, function()
-                if tipState.gen == gen and tipWrap.Parent then tipWrap.Visible = false end
+            local exit = tween(tipTxt, 0.1, { TextTransparency = 1 })
+            completed(exit, function()
+                if tipState.gen == gen and tipWrap.Parent and not state.destroyed then tipWrap.Visible = false end
             end)
         end
         local function showTip(text, row)
@@ -792,6 +813,9 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             if x + tw > vy.X - 10 then x = rp.X - 12 - tw end
             if x < 10 then x = 10 end
             local cy = clamp(rp.Y + rs.Y / 2, 22, vy.Y - 22)
+            killTween(tipFace, "BackgroundTransparency")
+            killTween(tipTxt, "TextTransparency")
+            killTween(tipWrap, "Position")
             tipTxt.Text = clean
             tipWrap.Size = UDim2.new(0, tw, 0, 28)
             tipWrap.Position = UDim2.new(0, x, 0, cy + 4)
@@ -827,15 +851,18 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
         dragZone.InputBegan:Connect(function() closeAllPops() end)
 
         local confirmActive = false
+        local confirmGeneration = 0
         local scrim, card
 
         local function hideConfirm()
             if not confirmActive or state.unloading then return end
             confirmActive = false
+            confirmGeneration = confirmGeneration + 1
+            local generation = confirmGeneration
             tween(scrim, 0.15, { BackgroundTransparency = 1 })
-            tween(card, 0.15, { Position = UDim2.new(0.5, 0, 0.5, 8), GroupTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-            task.delay(0.2, function()
-                if not confirmActive then
+            local exit = tween(card, 0.15, { Position = UDim2.new(0.5, 0, 0.5, 8), GroupTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+            completed(exit, function()
+                if generation == confirmGeneration and not confirmActive and not state.destroyed and card.Parent then
                     card.Visible = false
                     scrim.Visible = false
                 end
@@ -974,12 +1001,15 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
                 closeB.Activated:Connect(unloadNow)
             end
             confirmActive = true
+            confirmGeneration = confirmGeneration + 1
             card.Size = UDim2.new(0, math.min(420, W - 48), 0, 156)
+            if not card.Visible then
+                scrim.BackgroundTransparency = 1
+                card.Position = UDim2.new(0.5, 0, 0.5, 8)
+                card.GroupTransparency = 1
+            end
             scrim.Visible = true
             card.Visible = true
-            scrim.BackgroundTransparency = 1
-            card.Position = UDim2.new(0.5, 0, 0.5, 8)
-            card.GroupTransparency = 1
             tween(scrim, 0.20, { BackgroundTransparency = 0.42 })
             tween(card, 0.23, { Position = UDim2.new(0.5, 0, 0.5, 0), GroupTransparency = 0 }, Enum.EasingStyle.Quart)
         end
@@ -1004,6 +1034,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             hexToColor = hexToColor,
             icon = icon,
             killTween = killTween,
+            completed = completed,
             list = list,
             makeRow = makeRow,
             measureText = measureText,
