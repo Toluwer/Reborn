@@ -210,7 +210,7 @@ return function(ctx)
             return index
         end
         function lst:Remove(index)
-            if type(index) ~= "number" then return false end
+            if type(index) ~= "number" or index ~= index or math.abs(index) == math.huge then return false end
             index = math.floor(index)
             if index < 1 or index > #items then return false end
             local rec = items[index]
@@ -252,7 +252,7 @@ return function(ctx)
                 selectRec(nil, fire and true or false)
                 return
             end
-            if type(index) ~= "number" then return end
+            if type(index) ~= "number" or index ~= index or math.abs(index) == math.huge then return end
             index = math.floor(index)
             if index < 1 or index > #items then return end
             selectRec(items[index], fire and true or false)

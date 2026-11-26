@@ -159,12 +159,16 @@ return function(Theme)
         return "#" .. to(c.R) .. to(c.G) .. to(c.B)
     end
 
-    local function hexToColor(hex)
-        local h = tostring(hex):gsub("#", "")
-        local r = tonumber(h:sub(1, 2), 16) or 0
-        local g = tonumber(h:sub(3, 4), 16) or 0
-        local b = tonumber(h:sub(5, 6), 16) or 0
-        return Color3.fromRGB(r, g, b)
+    local function hexToColor(value)
+        if typeof(value) == "Color3" then return value end
+        if type(value) ~= "string" then return nil end
+        local hex = value:match("^#?(%x%x%x%x%x%x)$")
+        if not hex then return nil end
+        return Color3.fromRGB(
+            tonumber(hex:sub(1, 2), 16),
+            tonumber(hex:sub(3, 4), 16),
+            tonumber(hex:sub(5, 6), 16)
+        )
     end
 
     local function keyDisplayName(name)

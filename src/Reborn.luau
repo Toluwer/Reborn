@@ -240,12 +240,16 @@ local createCore = (function()
             return "#" .. to(c.R) .. to(c.G) .. to(c.B)
         end
 
-        local function hexToColor(hex)
-            local h = tostring(hex):gsub("#", "")
-            local r = tonumber(h:sub(1, 2), 16) or 0
-            local g = tonumber(h:sub(3, 4), 16) or 0
-            local b = tonumber(h:sub(5, 6), 16) or 0
-            return Color3.fromRGB(r, g, b)
+        local function hexToColor(value)
+            if typeof(value) == "Color3" then return value end
+            if type(value) ~= "string" then return nil end
+            local hex = value:match("^#?(%x%x%x%x%x%x)$")
+            if not hex then return nil end
+            return Color3.fromRGB(
+                tonumber(hex:sub(1, 2), 16),
+                tonumber(hex:sub(3, 4), 16),
+                tonumber(hex:sub(5, 6), 16)
+            )
         end
 
         local function keyDisplayName(name)
@@ -729,137 +733,225 @@ local attachConfig = (function()
     return function(Reborn, Core, Window, state, config)
         local HttpService = Core.HttpService
 
-        local function sanitizeName(s)
-            return (tostring(s):gsub("[^%w%-_]", "-"))
+        local function sanitizeName(value)
+            local name = tostring(value):gsub("[^%w%-_]", "-")
+            return name ~= "" and name or "default"
         end
-        local function cfgDir()
-            return "reborn/" .. sanitizeName(config.Title or "Reborn")
+
+        local directory = "reborn/" .. sanitizeName(config.Title or "Reborn")
+
+        local function pathFor(name)
+            return directory .. "/" .. sanitizeName(name or "default") .. ".json"
         end
-        local function cfgPath(name)
-            return cfgDir() .. "/" .. sanitizeName(name or "default") .. ".json"
+
+        local function canRead()
+            return type(readfile) == "function" and type(isfile) == "function"
         end
-        local function fsAvailable()
-            return type(writefile) == "function" and type(readfile) == "function" and type(isfile) == "function"
+
+        local function canWrite()
+            return canRead() and type(writefile) == "function"
+        end
+
+        local function finite(value)
+            return type(value) == "number" and value == value and math.abs(value) < math.huge
+        end
+
+        local function scalar(value)
+            return type(value) == "string" or type(value) == "boolean" or finite(value)
+        end
+
+        local function snapshot(entry)
+            local element = entry.el
+            local kind = entry.kind
+
+            if kind == "Toggle" then
+                return element.Value == true
+            elseif kind == "Slider" then
+                if finite(element.Value) then return element.Value end
+            elseif kind == "Dropdown" then
+                if entry.cfg.Multi then
+                    local values = {}
+                    for _, value in ipairs(element.Value) do
+                        if scalar(value) then table.insert(values, value) end
+                    end
+                    return values
+                end
+                if scalar(element.Value) then return element.Value end
+            elseif kind == "Keybind" then
+                return element.Name
+            elseif kind == "ColorPicker" then
+                return element.Hex
+            elseif kind == "Input" then
+                return element.Text
+            elseif kind == "Image" then
+                return element.Image.Image
+            elseif kind == "List" then
+                if element.Selected == nil then return false end
+                return element.Selected
+            end
+            return nil
+        end
+
+        local function restore(entry, value)
+            local element = entry.el
+            local kind = entry.kind
+
+            if kind == "Toggle" then
+                if type(value) == "boolean" then element:Set(value, false) end
+            elseif kind == "Slider" then
+                local number = tonumber(value)
+                if finite(number) then element:Set(number, false) end
+            elseif kind == "Dropdown" then
+                if entry.cfg.Multi then
+                    if type(value) ~= "table" then return end
+                    local values = {}
+                    for _, option in ipairs(value) do
+                        if not scalar(option) then return end
+                        table.insert(values, option)
+                    end
+                    element:Set(values, false)
+                elseif scalar(value) then
+                    element:Set(value, false)
+                end
+            elseif kind == "Keybind" or kind == "Input" then
+                if type(value) == "string" then element:Set(value) end
+            elseif kind == "ColorPicker" then
+                if type(value) == "string" then element:Set(value, false) end
+            elseif kind == "Image" then
+                if type(value) == "string" or finite(value) then element:SetImage(value) end
+            elseif kind == "List" then
+                if value == false then
+                    element:SetSelected(nil, false)
+                elseif finite(value) then
+                    element:SetSelected(value, false)
+                end
+            end
+        end
+
+        local function flagOf(entry)
+            local flag = entry.cfg.Flag
+            if not entry.destroyed and type(flag) == "string" and flag ~= "" then
+                return flag
+            end
         end
 
         function Window:GetConfig()
-            local out = {}
-            for _, e in ipairs(state.elements) do
-                local el, k, flag = e.el, e.kind, e.cfg.Flag
-                if flag and not e.hidden then
-                    if k == "Toggle" then
-                        out[flag] = el.Value and true or false
-                    elseif k == "Slider" then
-                        out[flag] = el.Value
-                    elseif k == "Dropdown" then
-                        if type(el.Value) == "table" then
-                            local c = {}
-                            for i, v in ipairs(el.Value) do c[i] = v end
-                            out[flag] = c
-                        else
-                            out[flag] = el.Value
-                        end
-                    elseif k == "Keybind" then
-                        out[flag] = el.Name
-                    elseif k == "ColorPicker" then
-                        out[flag] = el.Hex
-                    elseif k == "Input" then
-                        out[flag] = el.Text
-                    elseif k == "Image" then
-                        out[flag] = el.Image.Image
-                    elseif k == "List" then
-                        out[flag] = el.Selected
-                    end
+            local values = {}
+            for _, entry in ipairs(state.elements) do
+                local flag = flagOf(entry)
+                if flag then
+                    local value = snapshot(entry)
+                    if value ~= nil then values[flag] = value end
                 end
             end
-            return out
+            return values
         end
 
         function Window:SetConfig(vals)
-            if type(vals) ~= "table" then return end
-            for _, e in ipairs(state.elements) do
-                local flag = e.cfg.Flag
+            if state.destroyed or type(vals) ~= "table" then return end
+            for _, entry in ipairs(table.clone(state.elements)) do
+                local flag = flagOf(entry)
                 if flag and vals[flag] ~= nil then
-                    if e.kind == "Keybind" or e.kind == "Input" then
-                        e.el:Set(vals[flag])
-                    else
-                        e.el:Set(vals[flag], false)
-                    end
+                    pcall(restore, entry, vals[flag])
                 end
             end
         end
 
         function Window:SaveConfig(name)
-            name = tostring(name or "default")
-            local okJson, json = pcall(function() return HttpService:JSONEncode(self:GetConfig()) end)
-            if not okJson or type(json) ~= "string" then return false end
-            if fsAvailable() then
-                if type(isfolder) == "function" and type(makefolder) == "function" then
-                    pcall(function()
-                        if not isfolder("reborn") then makefolder("reborn") end
-                        if not isfolder(cfgDir()) then makefolder(cfgDir()) end
-                    end)
-                end
-                local ok = pcall(function() writefile(cfgPath(name), json) end)
-                if not ok then return false end
-            else
-                Reborn._configs[cfgPath(name)] = json
+            if state.destroyed then return false end
+            local ok, json = pcall(function()
+                return HttpService:JSONEncode(self:GetConfig())
+            end)
+            if not ok or type(json) ~= "string" then return false end
+
+            local path = pathFor(name)
+            if not canWrite() then
+                Reborn._configs[path] = json
+                return true
             end
-            return true
+
+            local written = pcall(function()
+                if type(isfolder) == "function" and type(makefolder) == "function" then
+                    if not isfolder("reborn") then makefolder("reborn") end
+                    if not isfolder(directory) then makefolder(directory) end
+                end
+                writefile(path, json)
+            end)
+            if written then Reborn._configs[path] = nil end
+            return written
         end
 
         function Window:LoadConfig(name)
-            name = tostring(name or "default")
-            local json = nil
-            if fsAvailable() then
+            if state.destroyed then return nil end
+            local path = pathFor(name)
+            local json = Reborn._configs[path]
+
+            if json == nil and canRead() then
                 local ok, content = pcall(function()
-                    if isfile(cfgPath(name)) then return readfile(cfgPath(name)) end
-                    return nil
+                    if isfile(path) then return readfile(path) end
                 end)
-                if ok then json = content end
+                if not ok then return nil end
+                json = content
             end
-            if json == nil then json = Reborn._configs[cfgPath(name)] end
             if type(json) ~= "string" then return nil end
-            local ok, tbl = pcall(function() return HttpService:JSONDecode(json) end)
-            if not ok or type(tbl) ~= "table" then return nil end
-            self:SetConfig(tbl)
-            return tbl
+
+            local ok, values = pcall(function()
+                return HttpService:JSONDecode(json)
+            end)
+            if not ok or type(values) ~= "table" then return nil end
+
+            self:SetConfig(values)
+            return values
         end
 
         function Window:DeleteConfig(name)
-            name = tostring(name or "default")
-            Reborn._configs[cfgPath(name)] = nil
-            if fsAvailable() and type(delfile) == "function" then
-                pcall(function()
-                    if isfile(cfgPath(name)) then delfile(cfgPath(name)) end
-                end)
+            local path = pathFor(name)
+            local existed = Reborn._configs[path] ~= nil
+
+            if type(isfile) == "function" then
+                local checked, onDisk = pcall(isfile, path)
+                if not checked then return false end
+                if onDisk then
+                    if type(delfile) ~= "function" then return false end
+                    local deleted = pcall(delfile, path)
+                    if not deleted then return false end
+                    local verified, remains = pcall(isfile, path)
+                    if not verified or remains then return false end
+                    existed = true
+                end
             end
-            return true
+
+            Reborn._configs[path] = nil
+            return existed
         end
 
         function Window:ListConfigs()
-            local out, seen = {}, {}
+            local names, seen = {}, {}
+            local function add(name)
+                if name and not seen[name] then
+                    seen[name] = true
+                    table.insert(names, name)
+                end
+            end
+
             if type(listfiles) == "function" then
-                local ok, files = pcall(function() return listfiles(cfgDir()) end)
+                local ok, files = pcall(listfiles, directory)
                 if ok and type(files) == "table" then
-                    for _, f in ipairs(files) do
-                        local base = tostring(f):match("([^%/\\]+)%.json$")
-                        if base and not seen[base] then
-                            seen[base] = true
-                            table.insert(out, base)
-                        end
+                    for _, file in ipairs(files) do
+                        add(tostring(file):match("([^%/\\]+)%.json$"))
                     end
                 end
             end
+
+            local prefix = directory .. "/"
             for path in pairs(Reborn._configs) do
-                local base = path:match("^" .. cfgDir():gsub("%W", "%%%0") .. "/(.+)%.json$")
-                if base and not seen[base] then
-                    seen[base] = true
-                    table.insert(out, base)
+                if path:sub(1, #prefix) == prefix then
+                    add(path:sub(#prefix + 1):match("^([^/]+)%.json$"))
                 end
             end
-            table.sort(out)
-            return out
+
+            table.sort(names)
+            return names
         end
     end
 end)()
@@ -3035,16 +3127,27 @@ Components.Slider = (function()
             })
             corner(handle, GEO.HandleD / 2)
 
-            local min = tonumber(cfg.Min) or 0
-            local max = tonumber(cfg.Max) or 100
-            if max <= min then max = min + 1 end
-            local step = tonumber(cfg.Step) or 1
-            if step <= 0 then step = 1 end
-            local function snap(raw)
-                return clamp(min + rnd((raw - min) / step) * step, min, max)
+            local function finiteNumber(raw)
+                local value = tonumber(raw)
+                if value and value == value and math.abs(value) < math.huge then return value end
             end
-            local value = snap(tonumber(cfg.Value) or min)
-            local suffix = cfg.Suffix or ""
+
+            local min = finiteNumber(cfg.Min) or 0
+            local max = finiteNumber(cfg.Max) or 100
+            if max <= min then max = min + 1 end
+            if max <= min or not finiteNumber(max - min) then min, max = 0, 100 end
+            local step = finiteNumber(cfg.Step) or 1
+            if step <= 0 then step = 1 end
+
+            local function snap(raw)
+                raw = clamp(raw, min, max)
+                local units = (raw - min) / step
+                if not finiteNumber(units) then return raw end
+                return clamp(min + rnd(units) * step, min, max)
+            end
+
+            local value = snap(finiteNumber(cfg.Value) or min)
+            local suffix = tostring(cfg.Suffix or "")
             local sld = { Value = value }
 
             local function render()
@@ -3087,15 +3190,17 @@ Components.Slider = (function()
             registerSearch(row, cfg.Text, section)
 
             function sld:Set(v, fire)
-                value = snap(tonumber(v) or min)
+                local number = finiteNumber(v)
+                if number == nil then return end
+                value = snap(number)
                 sld.Value = value
                 render()
                 if fire and cfg.Callback then cfg.Callback(value) end
             end
             function sld:SetRange(mn, mx)
-                mn = tonumber(mn)
-                mx = tonumber(mx)
-                if mn == nil or mx == nil or mx <= mn then return false end
+                mn = finiteNumber(mn)
+                mx = finiteNumber(mx)
+                if mn == nil or mx == nil or mx <= mn or not finiteNumber(mx - mn) then return false end
                 min = mn
                 max = mx
                 value = snap(clamp(value, min, max))
@@ -3542,6 +3647,7 @@ Components.Keybind = (function()
                 Parent = chip,
             })
             local function fitChip()
+                if not row.Parent then return end
                 local w = rnd(math.max(GEO.ChipMinW, measureText(txt.Text, 11, F.Mono) + 18))
                 chip.Size = UDim2.new(0, w, 0, GEO.ChipH)
                 lbl.Size = UDim2.new(1, -(GEO.RowPad + 22 + w), 0, 16)
@@ -3551,8 +3657,12 @@ Components.Keybind = (function()
 
             local mode = tostring(cfg.Mode or "Always")
             if mode ~= "Toggle" and mode ~= "Hold" then mode = "Always" end
+            local initial = type(cfg.Value) == "string" and cfg.Value or "None"
+            local initialCode, initialInput = bindFromString(initial)
+            if not initialCode and not initialInput then initial = "None" end
+            txt.Text = initial
             local kb = {
-                Name = cfg.Value or "None",
+                Name = initial,
                 KeyCode = nil,
                 UserInputType = nil,
                 Callback = cfg.Callback,
@@ -3632,8 +3742,11 @@ Components.Keybind = (function()
             registerSearch(row, cfg.Text, section)
 
             function kb:Set(name)
+                if type(name) ~= "string" then return end
                 local code, uit = bindFromString(name)
-                kb.Name = tostring(name)
+                if name ~= "None" and not code and not uit then return end
+                if state.listening == kb then cancelListen() end
+                kb.Name = name
                 kb.KeyCode = code
                 kb.UserInputType = uit
                 kb.Active = false
@@ -3890,16 +4003,7 @@ Components.ColorPicker = (function()
                 Parent = popFace,
             })
 
-            local startColor
-            if type(cfg.Value) == "string" then
-                startColor = hexToColor(cfg.Value)
-            elseif typeof and typeof(cfg.Value) == "Color3" then
-                startColor = cfg.Value
-            elseif cfg.Value and cfg.Value.R then
-                startColor = cfg.Value
-            else
-                startColor = theme.Accent
-            end
+            local startColor = hexToColor(cfg.Value) or theme.Accent
             local h, s, v = Color3.toHSV(startColor)
             local cp = { Hex = colorToHex(startColor) }
 
@@ -3995,8 +4099,9 @@ Components.ColorPicker = (function()
             render(false)
 
             function cp:Set(hex, fire)
-                local c = hexToColor(hex)
-                h, s, v = Color3.toHSV(c)
+                local color = hexToColor(hex)
+                if not color then return end
+                h, s, v = Color3.toHSV(color)
                 render(fire and true or false)
             end
             local function setEnabled(v)
@@ -4050,7 +4155,7 @@ Components.Input = (function()
                 Size = UDim2.new(1, 0, 1, 0),
                 BackgroundColor3 = theme.Surface,
                 BorderSizePixel = 0,
-                Text = tostring(cfg.Value or ""),
+                Text = cfg.Value == nil and "" or tostring(cfg.Value),
                 PlaceholderText = tostring(cfg.Placeholder or ""),
                 PlaceholderColor3 = theme.TextFaint,
                 FontFace = F.Regular,
@@ -4081,7 +4186,7 @@ Components.Input = (function()
             local inp = { Text = box.Text }
             function inp:Set(text)
                 dbGen = dbGen + 1
-                inp.Text = tostring(text)
+                inp.Text = text == nil and "" or tostring(text)
                 box.Text = inp.Text
             end
             box:GetPropertyChangedSignal("Text"):Connect(function()
@@ -4617,7 +4722,7 @@ Components.List = (function()
                 return index
             end
             function lst:Remove(index)
-                if type(index) ~= "number" then return false end
+                if type(index) ~= "number" or index ~= index or math.abs(index) == math.huge then return false end
                 index = math.floor(index)
                 if index < 1 or index > #items then return false end
                 local rec = items[index]
@@ -4659,7 +4764,7 @@ Components.List = (function()
                     selectRec(nil, fire and true or false)
                     return
                 end
-                if type(index) ~= "number" then return end
+                if type(index) ~= "number" or index ~= index or math.abs(index) == math.huge then return end
                 index = math.floor(index)
                 if index < 1 or index > #items then return end
                 selectRec(items[index], fire and true or false)

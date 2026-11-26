@@ -116,7 +116,7 @@ Window:LoadConfig("default")
 | `DeleteConfig(name)` | Delete a profile. |
 | `ListConfigs()` | List saved profiles. |
 
-Profiles are saved under `reborn/<title>/<name>.json` when filesystem access is available.
+Profiles include hidden and disabled controls with a `Flag`. Loading applies values without firing callbacks. Profiles are saved under `reborn/<title>/<name>.json` when filesystem access is available; otherwise they are kept in memory.
 
 ## Theme
 

@@ -33,7 +33,7 @@ return function(ctx)
             Size = UDim2.new(1, 0, 1, 0),
             BackgroundColor3 = theme.Surface,
             BorderSizePixel = 0,
-            Text = tostring(cfg.Value or ""),
+            Text = cfg.Value == nil and "" or tostring(cfg.Value),
             PlaceholderText = tostring(cfg.Placeholder or ""),
             PlaceholderColor3 = theme.TextFaint,
             FontFace = F.Regular,
@@ -64,7 +64,7 @@ return function(ctx)
         local inp = { Text = box.Text }
         function inp:Set(text)
             dbGen = dbGen + 1
-            inp.Text = tostring(text)
+            inp.Text = text == nil and "" or tostring(text)
             box.Text = inp.Text
         end
         box:GetPropertyChangedSignal("Text"):Connect(function()

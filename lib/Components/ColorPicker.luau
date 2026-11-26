@@ -226,16 +226,7 @@ return function(ctx)
             Parent = popFace,
         })
 
-        local startColor
-        if type(cfg.Value) == "string" then
-            startColor = hexToColor(cfg.Value)
-        elseif typeof and typeof(cfg.Value) == "Color3" then
-            startColor = cfg.Value
-        elseif cfg.Value and cfg.Value.R then
-            startColor = cfg.Value
-        else
-            startColor = theme.Accent
-        end
+        local startColor = hexToColor(cfg.Value) or theme.Accent
         local h, s, v = Color3.toHSV(startColor)
         local cp = { Hex = colorToHex(startColor) }
 
@@ -331,8 +322,9 @@ return function(ctx)
         render(false)
 
         function cp:Set(hex, fire)
-            local c = hexToColor(hex)
-            h, s, v = Color3.toHSV(c)
+            local color = hexToColor(hex)
+            if not color then return end
+            h, s, v = Color3.toHSV(color)
             render(fire and true or false)
         end
         local function setEnabled(v)

@@ -71,6 +71,7 @@ return function(ctx)
             Parent = chip,
         })
         local function fitChip()
+            if not row.Parent then return end
             local w = rnd(math.max(GEO.ChipMinW, measureText(txt.Text, 11, F.Mono) + 18))
             chip.Size = UDim2.new(0, w, 0, GEO.ChipH)
             lbl.Size = UDim2.new(1, -(GEO.RowPad + 22 + w), 0, 16)
@@ -80,8 +81,12 @@ return function(ctx)
 
         local mode = tostring(cfg.Mode or "Always")
         if mode ~= "Toggle" and mode ~= "Hold" then mode = "Always" end
+        local initial = type(cfg.Value) == "string" and cfg.Value or "None"
+        local initialCode, initialInput = bindFromString(initial)
+        if not initialCode and not initialInput then initial = "None" end
+        txt.Text = initial
         local kb = {
-            Name = cfg.Value or "None",
+            Name = initial,
             KeyCode = nil,
             UserInputType = nil,
             Callback = cfg.Callback,
@@ -161,8 +166,11 @@ return function(ctx)
         registerSearch(row, cfg.Text, section)
 
         function kb:Set(name)
+            if type(name) ~= "string" then return end
             local code, uit = bindFromString(name)
-            kb.Name = tostring(name)
+            if name ~= "None" and not code and not uit then return end
+            if state.listening == kb then cancelListen() end
+            kb.Name = name
             kb.KeyCode = code
             kb.UserInputType = uit
             kb.Active = false

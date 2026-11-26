@@ -83,16 +83,27 @@ return function(ctx)
         })
         corner(handle, GEO.HandleD / 2)
 
-        local min = tonumber(cfg.Min) or 0
-        local max = tonumber(cfg.Max) or 100
-        if max <= min then max = min + 1 end
-        local step = tonumber(cfg.Step) or 1
-        if step <= 0 then step = 1 end
-        local function snap(raw)
-            return clamp(min + rnd((raw - min) / step) * step, min, max)
+        local function finiteNumber(raw)
+            local value = tonumber(raw)
+            if value and value == value and math.abs(value) < math.huge then return value end
         end
-        local value = snap(tonumber(cfg.Value) or min)
-        local suffix = cfg.Suffix or ""
+
+        local min = finiteNumber(cfg.Min) or 0
+        local max = finiteNumber(cfg.Max) or 100
+        if max <= min then max = min + 1 end
+        if max <= min or not finiteNumber(max - min) then min, max = 0, 100 end
+        local step = finiteNumber(cfg.Step) or 1
+        if step <= 0 then step = 1 end
+
+        local function snap(raw)
+            raw = clamp(raw, min, max)
+            local units = (raw - min) / step
+            if not finiteNumber(units) then return raw end
+            return clamp(min + rnd(units) * step, min, max)
+        end
+
+        local value = snap(finiteNumber(cfg.Value) or min)
+        local suffix = tostring(cfg.Suffix or "")
         local sld = { Value = value }
 
         local function render()
@@ -135,15 +146,17 @@ return function(ctx)
         registerSearch(row, cfg.Text, section)
 
         function sld:Set(v, fire)
-            value = snap(tonumber(v) or min)
+            local number = finiteNumber(v)
+            if number == nil then return end
+            value = snap(number)
             sld.Value = value
             render()
             if fire and cfg.Callback then cfg.Callback(value) end
         end
         function sld:SetRange(mn, mx)
-            mn = tonumber(mn)
-            mx = tonumber(mx)
-            if mn == nil or mx == nil or mx <= mn then return false end
+            mn = finiteNumber(mn)
+            mx = finiteNumber(mx)
+            if mn == nil or mx == nil or mx <= mn or not finiteNumber(mx - mn) then return false end
             min = mn
             max = mx
             value = snap(clamp(value, min, max))
