@@ -48,7 +48,6 @@ return function(context, tabsHolder, content, popovers)
             Parent = sec,
         })
         local titleText = string.upper(tostring(name or ""))
-        local titleW = measureText(titleText, 11, F.Semibold)
         New("TextLabel", {
             Size = UDim2.new(0, 0, 0, 14),
             AutomaticSize = Enum.AutomaticSize.X,
@@ -61,6 +60,7 @@ return function(context, tabsHolder, content, popovers)
             Parent = head,
         })
         if badge then
+            local titleW = measureText(titleText, 11, F.Semibold)
             local btext = string.upper(tostring(badge))
             local badgeW = measureText(btext, 10, F.Bold) + 10
             local bd = New("Frame", {

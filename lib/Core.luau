@@ -38,12 +38,13 @@ return function(Theme, createAnimation)
     end
 
     local function padding(inst, t, r, b, l)
-        local p = New("UIPadding", { Parent = inst })
-        if t then p.PaddingTop = UDim.new(0, t) end
-        if r then p.PaddingRight = UDim.new(0, r) end
-        if b then p.PaddingBottom = UDim.new(0, b) end
-        if l then p.PaddingLeft = UDim.new(0, l) end
-        return p
+        return New("UIPadding", {
+            PaddingTop = UDim.new(0, t or 0),
+            PaddingRight = UDim.new(0, r or 0),
+            PaddingBottom = UDim.new(0, b or 0),
+            PaddingLeft = UDim.new(0, l or 0),
+            Parent = inst,
+        })
     end
 
     local function list(parent, gap, sortOrder)

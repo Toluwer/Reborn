@@ -58,13 +58,20 @@ return function(Reborn, Core, Theme, Icons)
             end
         end
 
+        local function cancelExpiry(item)
+            if not item.expiry then return end
+            local expiry = item.expiry
+            item.expiry = nil
+            task.cancel(expiry)
+        end
+
         local function dismiss(item)
             if item.closed then return end
             item.closed = true
+            cancelExpiry(item)
+            local index = table.find(state.items, item)
+            if index then table.remove(state.items, index) end
             if not item.toast.Parent or not layer.Parent then return end
-            for i, it in ipairs(state.items) do
-                if it == item then table.remove(state.items, i) break end
-            end
             local exit = tween(item.toast, 0.22, { Position = UDim2.new(0, GEO.ToastW + 18, 0, item.toast.Position.Y.Offset) })
             completed(exit, function()
                 if item.toast.Parent then item.toast:Destroy() end
@@ -75,6 +82,8 @@ return function(Reborn, Core, Theme, Icons)
         local function notify(cfg)
             if not layer.Parent then return end
             cfg = cfg or {}
+            local estimatedHeight = toastHeight(cfg)
+            if not layer.Parent then return end
             local kind = TOAST_TYPES[cfg.Type] or TOAST_TYPES.info
             local toast = New("Frame", {
                 Position = UDim2.new(0, GEO.ToastW + 18, 0, 0),
@@ -128,7 +137,7 @@ return function(Reborn, Core, Theme, Icons)
                 ZIndex = 10,
                 Parent = toast,
             })
-            local item = { toast = toast, closed = false, estH = toastHeight(cfg) }
+            local item = { toast = toast, closed = false, estH = estimatedHeight }
             hit.Activated:Connect(function() dismiss(item) end)
             table.insert(state.items, item)
             while #state.items > 5 do
@@ -143,10 +152,21 @@ return function(Reborn, Core, Theme, Icons)
             end)
             local dur = tonumber(cfg.Duration) or 3.6
             if dur > 0 and dur < 3600 then
-                task.delay(dur, function() dismiss(item) end)
+                item.expiry = task.delay(dur, function()
+                    item.expiry = nil
+                    dismiss(item)
+                end)
             end
             return item
         end
+
+        layer.Destroying:Connect(function()
+            for _, item in ipairs(state.items) do
+                item.closed = true
+                cancelExpiry(item)
+            end
+            table.clear(state.items)
+        end)
 
         return { Layer = layer, Notify = notify }
     end

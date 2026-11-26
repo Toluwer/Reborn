@@ -395,7 +395,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             tween(pill, 0.2, { BackgroundColor3 = theme.Surface })
         end)
 
-        local toastLayer = buildToastLayer(gui, theme)
+        local toastLayer
 
         dragZone.InputBegan:Connect(function(input)
             if state.closed or state.min or state.restoring or not inputRouter.IsPointer(input) then return end
@@ -1157,7 +1157,10 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
 
         function Window:Notify(a, b)
             local cfg = normNotify(a, b)
-            if not Reborn.NotificationsEnabled then return end
+            if state.destroyed or not Reborn.NotificationsEnabled then return end
+            if not toastLayer then
+                toastLayer = buildToastLayer(gui, theme)
+            end
             toastLayer.Notify(cfg)
         end
 
