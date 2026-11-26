@@ -155,7 +155,7 @@ return function(ctx)
             if it == Enum.UserInputType.MouseButton1 or it == Enum.UserInputType.MouseButton2 or it == Enum.UserInputType.MouseButton3 then
                 if state.listening == kb then
                     commitBind(MOUSE_NAMES[it] or "Mouse", nil, it)
-                elseif not state.listening then
+                else
                     startListen()
                 end
             end

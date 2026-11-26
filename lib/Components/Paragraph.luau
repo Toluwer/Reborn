@@ -25,7 +25,8 @@ return function(ctx)
         registerSearch(lbl, cfg.Text, section)
         local p = { Label = lbl }
         function p:Set(text)
-            lbl.Text = tostring(text)
+            lbl.Text = tostring(text or "")
+            registerSearch(lbl, lbl.Text, section)
         end
         local function setEnabled(v)
             lbl.TextTransparency = v and 0 or 0.5

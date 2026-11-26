@@ -796,11 +796,10 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             tipState.gen = tipState.gen + 1
             if not tipState.armed then return end
             tipState.armed = false
-            local gen = tipState.gen
             tween(tipFace, 0.1, { BackgroundTransparency = 1 })
             local exit = tween(tipTxt, 0.1, { TextTransparency = 1 })
             completed(exit, function()
-                if tipState.gen == gen and tipWrap.Parent and not state.destroyed then tipWrap.Visible = false end
+                if not tipState.armed and tipWrap.Parent and not state.destroyed then tipWrap.Visible = false end
             end)
         end
         local function showTip(text, row)
@@ -808,7 +807,9 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             if clean == "" then return end
             local rp, rs = row.AbsolutePosition, row.AbsoluteSize
             local vy = viewportSize()
+            local generation = tipState.gen
             local tw = clamp(measureText(clean, 12, F.Regular) + 22, 44, 320)
+            if generation ~= tipState.gen or state.destroyed or state.closed or state.min or not row.Parent then return end
             local x = rp.X + rs.X + 12
             if x + tw > vy.X - 10 then x = rp.X - 12 - tw end
             if x < 10 then x = 10 end
@@ -832,10 +833,15 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
                         tipState.gen = tipState.gen + 1
                         local gen = tipState.gen
                         task.delay(0.55, function()
-                            if tipState.gen == gen and not state.destroyed and row.Parent then
-                                tipState.armed = true
-                                showTip(cfg.Tooltip, row)
+                            if tipState.gen ~= gen or state.destroyed or state.closed or state.min or not row.Parent then return end
+                            local ancestor = row
+                            while ancestor and ancestor ~= gui do
+                                if ancestor:IsA("GuiObject") and not ancestor.Visible then return end
+                                ancestor = ancestor.Parent
                             end
+                            if ancestor ~= gui then return end
+                            tipState.armed = true
+                            showTip(cfg.Tooltip, row)
                         end)
                     end
                 end)
@@ -847,6 +853,12 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
         end
 
         lifecycle.SetTooltips(hideTip, tipHover)
+        windowFrame:GetPropertyChangedSignal("Visible"):Connect(function()
+            if not windowFrame.Visible then hideTip() end
+        end)
+        bodyGroup:GetPropertyChangedSignal("Visible"):Connect(function()
+            if not bodyGroup.Visible then hideTip() end
+        end)
 
         dragZone.InputBegan:Connect(function() closeAllPops() end)
 
@@ -1069,7 +1081,13 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
 
         local addTab = createNavigation(context, tabsHolder, content, popovers)
 
+        local function matchesKeybind(keybind, input)
+            return (keybind.KeyCode ~= nil and keybind.KeyCode ~= Enum.KeyCode.None and input.KeyCode == keybind.KeyCode)
+                or (keybind.UserInputType ~= nil and input.UserInputType == keybind.UserInputType)
+        end
+
         inputRouter.OnBegan(function(input, gameProcessed)
+            if state.destroyed then return end
             if state.listening and input.UserInputType == Enum.UserInputType.Keyboard then
                 if input.KeyCode == Enum.KeyCode.Escape then
                     state.listening._cancel()
@@ -1081,23 +1099,24 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
                 return
             end
             if not gameProcessed then
-                for _, kb in ipairs(state.keybinds) do
-                    local matched = false
-                    if kb.KeyCode and kb.KeyCode ~= Enum.KeyCode.None and input.KeyCode == kb.KeyCode then matched = true end
-                    if kb.UserInputType and input.UserInputType == kb.UserInputType then matched = true end
-                    if matched and kb.Callback then
+                for _, kb in ipairs(table.clone(state.keybinds)) do
+                    if state.destroyed then return end
+                    if matchesKeybind(kb, input) and kb.Callback then
                         if kb.Mode == "Toggle" then
                             kb.Active = not kb.Active
                             kb.Callback(kb.Active, kb.Name, input, gameProcessed)
                         elseif kb.Mode == "Hold" then
-                            kb.Active = true
-                            kb.Callback(true, kb.Name, input, gameProcessed)
+                            if not kb.Active then
+                                kb.Active = true
+                                kb.Callback(true, kb.Name, input, gameProcessed)
+                            end
                         else
                             kb.Callback(kb.Name, input, gameProcessed)
                         end
                     end
                 end
             end
+            if state.destroyed then return end
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                 local m = Vector2.new(input.Position.X, input.Position.Y)
                 popovers.CloseOutside(m)
@@ -1117,15 +1136,11 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             end
         end)
         inputRouter.OnEnded(function(input, gameProcessed)
-            for _, kb in ipairs(state.keybinds) do
-                if kb.Mode == "Hold" and kb.Active and kb.Callback then
-                    local matched = false
-                    if kb.KeyCode and kb.KeyCode ~= Enum.KeyCode.None and input.KeyCode == kb.KeyCode then matched = true end
-                    if kb.UserInputType and input.UserInputType == kb.UserInputType then matched = true end
-                    if matched then
-                        kb.Active = false
-                        kb.Callback(false, kb.Name, input, gameProcessed)
-                    end
+            for _, kb in ipairs(table.clone(state.keybinds)) do
+                if state.destroyed then return end
+                if kb.Mode == "Hold" and kb.Active and kb.Callback and matchesKeybind(kb, input) then
+                    kb.Active = false
+                    kb.Callback(false, kb.Name, input, gameProcessed)
                 end
             end
         end)
@@ -1194,6 +1209,8 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             table.clear(state.keybinds)
             table.clear(state.openPops)
             table.clear(state.sections)
+            table.clear(state.tabs)
+            state.activeTab = nil
             state.listening = nil
 
             local index = table.find(Reborn._windows, Window)

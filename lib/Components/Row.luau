@@ -13,6 +13,8 @@ return function(ctx)
     local function addRowContainer(section, cfg)
         cfg = cfg or {}
         local gap = tonumber(cfg.Gap) or GEO.GridGap
+        if gap ~= gap or math.abs(gap) == math.huge then gap = GEO.GridGap end
+        gap = math.max(0, gap)
         local container = New("Frame", {
             Size = UDim2.new(1, 0, 0, GEO.RowH),
             BackgroundTransparency = 1,
@@ -36,11 +38,29 @@ return function(ctx)
         local function layoutCells()
             local count = #r._cells
             if count == 0 then return end
-            local share = rnd(gap * (count - 1) / count)
+            local flexible = 0
+            local fixedScale, fixedOffset = 0, 0
+            for _, cell in ipairs(r._cells) do
+                if cell.fixed then
+                    fixedScale = fixedScale + cell.frame.Size.X.Scale
+                    fixedOffset = fixedOffset + cell.frame.Size.X.Offset
+                else
+                    flexible = flexible + 1
+                end
+            end
+
+            local availableScale = math.max(0, 1 - fixedScale)
+            local reserved = fixedOffset + gap * (count - 1)
+            local width = container.AbsoluteSize.X
+            local scale = flexible > 0 and availableScale / flexible or 0
+            local offset = flexible > 0 and -rnd(reserved / flexible) or 0
+            if width > 0 and width * scale + offset < 0 then
+                scale, offset = 0, 0
+            end
             for index, cell in ipairs(r._cells) do
                 cell.frame.LayoutOrder = index
                 if not cell.fixed then
-                    cell.frame.Size = UDim2.new(1 / count, -share, 0, cell.frame.Size.Y.Offset)
+                    cell.frame.Size = UDim2.new(scale, offset, 0, cell.frame.Size.Y.Offset)
                 end
             end
         end
@@ -58,6 +78,8 @@ return function(ctx)
             end)
             layoutCells()
         end
+        container:GetPropertyChangedSignal("AbsoluteSize"):Connect(layoutCells)
+
         function r:Button(a, b)
             local c = normCfg(a, b)
             local el = addButton(self, c)

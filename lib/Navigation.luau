@@ -125,6 +125,7 @@ return function(context, tabsHolder, content, popovers)
 
         context.input.Cancel()
         closeAllPops()
+        if state.listening then state.listening._cancel() end
         tabGeneration = tabGeneration + 1
         local generation = tabGeneration
         local incoming = tab._scroller

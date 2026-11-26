@@ -109,7 +109,11 @@ return function(state, popovers, inputRouter)
 
     local function search(text)
         query = tostring(text or ""):lower()
-        if query ~= "" then popovers.CloseAll() end
+        if query ~= "" then
+            inputRouter.Cancel()
+            popovers.CloseAll()
+            if hideTip then hideTip() end
+        end
         refreshSearch()
     end
 
@@ -176,12 +180,15 @@ return function(state, popovers, inputRouter)
         table.insert(entries, entry)
 
         local callback = cfg.Callback
-        if callback then
+        if type(callback) == "function" then
             cfg.Callback = function(...)
                 if entry.disabled or entry.destroyed or state.destroyed then return end
                 return callback(...)
             end
             if kind == "Keybind" then el.Callback = cfg.Callback end
+        else
+            cfg.Callback = nil
+            if kind == "Keybind" then el.Callback = nil end
         end
 
         function el:SetEnabled(value)

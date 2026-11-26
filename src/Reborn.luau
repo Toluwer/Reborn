@@ -1113,6 +1113,7 @@ local createNavigation = (function()
 
             context.input.Cancel()
             closeAllPops()
+            if state.listening then state.listening._cancel() end
             tabGeneration = tabGeneration + 1
             local generation = tabGeneration
             local incoming = tab._scroller
@@ -1539,7 +1540,11 @@ local createLifecycle = (function()
 
         local function search(text)
             query = tostring(text or ""):lower()
-            if query ~= "" then popovers.CloseAll() end
+            if query ~= "" then
+                inputRouter.Cancel()
+                popovers.CloseAll()
+                if hideTip then hideTip() end
+            end
             refreshSearch()
         end
 
@@ -1606,12 +1611,15 @@ local createLifecycle = (function()
             table.insert(entries, entry)
 
             local callback = cfg.Callback
-            if callback then
+            if type(callback) == "function" then
                 cfg.Callback = function(...)
                     if entry.disabled or entry.destroyed or state.destroyed then return end
                     return callback(...)
                 end
                 if kind == "Keybind" then el.Callback = cfg.Callback end
+            else
+                cfg.Callback = nil
+                if kind == "Keybind" then el.Callback = nil end
             end
 
             function el:SetEnabled(value)
@@ -2580,11 +2588,10 @@ local createWindow = (function()
                 tipState.gen = tipState.gen + 1
                 if not tipState.armed then return end
                 tipState.armed = false
-                local gen = tipState.gen
                 tween(tipFace, 0.1, { BackgroundTransparency = 1 })
                 local exit = tween(tipTxt, 0.1, { TextTransparency = 1 })
                 completed(exit, function()
-                    if tipState.gen == gen and tipWrap.Parent and not state.destroyed then tipWrap.Visible = false end
+                    if not tipState.armed and tipWrap.Parent and not state.destroyed then tipWrap.Visible = false end
                 end)
             end
             local function showTip(text, row)
@@ -2592,7 +2599,9 @@ local createWindow = (function()
                 if clean == "" then return end
                 local rp, rs = row.AbsolutePosition, row.AbsoluteSize
                 local vy = viewportSize()
+                local generation = tipState.gen
                 local tw = clamp(measureText(clean, 12, F.Regular) + 22, 44, 320)
+                if generation ~= tipState.gen or state.destroyed or state.closed or state.min or not row.Parent then return end
                 local x = rp.X + rs.X + 12
                 if x + tw > vy.X - 10 then x = rp.X - 12 - tw end
                 if x < 10 then x = 10 end
@@ -2616,10 +2625,15 @@ local createWindow = (function()
                             tipState.gen = tipState.gen + 1
                             local gen = tipState.gen
                             task.delay(0.55, function()
-                                if tipState.gen == gen and not state.destroyed and row.Parent then
-                                    tipState.armed = true
-                                    showTip(cfg.Tooltip, row)
+                                if tipState.gen ~= gen or state.destroyed or state.closed or state.min or not row.Parent then return end
+                                local ancestor = row
+                                while ancestor and ancestor ~= gui do
+                                    if ancestor:IsA("GuiObject") and not ancestor.Visible then return end
+                                    ancestor = ancestor.Parent
                                 end
+                                if ancestor ~= gui then return end
+                                tipState.armed = true
+                                showTip(cfg.Tooltip, row)
                             end)
                         end
                     end)
@@ -2631,6 +2645,12 @@ local createWindow = (function()
             end
 
             lifecycle.SetTooltips(hideTip, tipHover)
+            windowFrame:GetPropertyChangedSignal("Visible"):Connect(function()
+                if not windowFrame.Visible then hideTip() end
+            end)
+            bodyGroup:GetPropertyChangedSignal("Visible"):Connect(function()
+                if not bodyGroup.Visible then hideTip() end
+            end)
 
             dragZone.InputBegan:Connect(function() closeAllPops() end)
 
@@ -2853,7 +2873,13 @@ local createWindow = (function()
 
             local addTab = createNavigation(context, tabsHolder, content, popovers)
 
+            local function matchesKeybind(keybind, input)
+                return (keybind.KeyCode ~= nil and keybind.KeyCode ~= Enum.KeyCode.None and input.KeyCode == keybind.KeyCode)
+                    or (keybind.UserInputType ~= nil and input.UserInputType == keybind.UserInputType)
+            end
+
             inputRouter.OnBegan(function(input, gameProcessed)
+                if state.destroyed then return end
                 if state.listening and input.UserInputType == Enum.UserInputType.Keyboard then
                     if input.KeyCode == Enum.KeyCode.Escape then
                         state.listening._cancel()
@@ -2865,23 +2891,24 @@ local createWindow = (function()
                     return
                 end
                 if not gameProcessed then
-                    for _, kb in ipairs(state.keybinds) do
-                        local matched = false
-                        if kb.KeyCode and kb.KeyCode ~= Enum.KeyCode.None and input.KeyCode == kb.KeyCode then matched = true end
-                        if kb.UserInputType and input.UserInputType == kb.UserInputType then matched = true end
-                        if matched and kb.Callback then
+                    for _, kb in ipairs(table.clone(state.keybinds)) do
+                        if state.destroyed then return end
+                        if matchesKeybind(kb, input) and kb.Callback then
                             if kb.Mode == "Toggle" then
                                 kb.Active = not kb.Active
                                 kb.Callback(kb.Active, kb.Name, input, gameProcessed)
                             elseif kb.Mode == "Hold" then
-                                kb.Active = true
-                                kb.Callback(true, kb.Name, input, gameProcessed)
+                                if not kb.Active then
+                                    kb.Active = true
+                                    kb.Callback(true, kb.Name, input, gameProcessed)
+                                end
                             else
                                 kb.Callback(kb.Name, input, gameProcessed)
                             end
                         end
                     end
                 end
+                if state.destroyed then return end
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     local m = Vector2.new(input.Position.X, input.Position.Y)
                     popovers.CloseOutside(m)
@@ -2901,15 +2928,11 @@ local createWindow = (function()
                 end
             end)
             inputRouter.OnEnded(function(input, gameProcessed)
-                for _, kb in ipairs(state.keybinds) do
-                    if kb.Mode == "Hold" and kb.Active and kb.Callback then
-                        local matched = false
-                        if kb.KeyCode and kb.KeyCode ~= Enum.KeyCode.None and input.KeyCode == kb.KeyCode then matched = true end
-                        if kb.UserInputType and input.UserInputType == kb.UserInputType then matched = true end
-                        if matched then
-                            kb.Active = false
-                            kb.Callback(false, kb.Name, input, gameProcessed)
-                        end
+                for _, kb in ipairs(table.clone(state.keybinds)) do
+                    if state.destroyed then return end
+                    if kb.Mode == "Hold" and kb.Active and kb.Callback and matchesKeybind(kb, input) then
+                        kb.Active = false
+                        kb.Callback(false, kb.Name, input, gameProcessed)
                     end
                 end
             end)
@@ -2978,6 +3001,8 @@ local createWindow = (function()
                 table.clear(state.keybinds)
                 table.clear(state.openPops)
                 table.clear(state.sections)
+                table.clear(state.tabs)
+                state.activeTab = nil
                 state.listening = nil
 
                 local index = table.find(Reborn._windows, Window)
@@ -3793,7 +3818,7 @@ Components.Keybind = (function()
                 if it == Enum.UserInputType.MouseButton1 or it == Enum.UserInputType.MouseButton2 or it == Enum.UserInputType.MouseButton3 then
                     if state.listening == kb then
                         commitBind(MOUSE_NAMES[it] or "Mouse", nil, it)
-                    elseif not state.listening then
+                    else
                         startListen()
                     end
                 end
@@ -4411,7 +4436,8 @@ Components.Paragraph = (function()
             registerSearch(lbl, cfg.Text, section)
             local p = { Label = lbl }
             function p:Set(text)
-                lbl.Text = tostring(text)
+                lbl.Text = tostring(text or "")
+                registerSearch(lbl, lbl.Text, section)
             end
             local function setEnabled(v)
                 lbl.TextTransparency = v and 0 or 0.5
@@ -4869,6 +4895,8 @@ Components.Row = (function()
         local function addRowContainer(section, cfg)
             cfg = cfg or {}
             local gap = tonumber(cfg.Gap) or GEO.GridGap
+            if gap ~= gap or math.abs(gap) == math.huge then gap = GEO.GridGap end
+            gap = math.max(0, gap)
             local container = New("Frame", {
                 Size = UDim2.new(1, 0, 0, GEO.RowH),
                 BackgroundTransparency = 1,
@@ -4892,11 +4920,29 @@ Components.Row = (function()
             local function layoutCells()
                 local count = #r._cells
                 if count == 0 then return end
-                local share = rnd(gap * (count - 1) / count)
+                local flexible = 0
+                local fixedScale, fixedOffset = 0, 0
+                for _, cell in ipairs(r._cells) do
+                    if cell.fixed then
+                        fixedScale = fixedScale + cell.frame.Size.X.Scale
+                        fixedOffset = fixedOffset + cell.frame.Size.X.Offset
+                    else
+                        flexible = flexible + 1
+                    end
+                end
+
+                local availableScale = math.max(0, 1 - fixedScale)
+                local reserved = fixedOffset + gap * (count - 1)
+                local width = container.AbsoluteSize.X
+                local scale = flexible > 0 and availableScale / flexible or 0
+                local offset = flexible > 0 and -rnd(reserved / flexible) or 0
+                if width > 0 and width * scale + offset < 0 then
+                    scale, offset = 0, 0
+                end
                 for index, cell in ipairs(r._cells) do
                     cell.frame.LayoutOrder = index
                     if not cell.fixed then
-                        cell.frame.Size = UDim2.new(1 / count, -share, 0, cell.frame.Size.Y.Offset)
+                        cell.frame.Size = UDim2.new(scale, offset, 0, cell.frame.Size.Y.Offset)
                     end
                 end
             end
@@ -4914,6 +4960,8 @@ Components.Row = (function()
                 end)
                 layoutCells()
             end
+            container:GetPropertyChangedSignal("AbsoluteSize"):Connect(layoutCells)
+
             function r:Button(a, b)
                 local c = normCfg(a, b)
                 local el = addButton(self, c)
