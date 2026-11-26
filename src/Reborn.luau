@@ -323,8 +323,6 @@ local createCore = (function()
             error("Reborn: no usable GUI parent (no gethui, no CoreGui access, no LocalPlayer) — pass config.Parent")
         end
 
-        local MARK = "__r"
-
         local function randomName()
             local t = {}
             for i = 1, 12 do
@@ -347,12 +345,6 @@ local createCore = (function()
             pcall(function()
                 if protect_gui then protect_gui(g) end
             end)
-        end
-
-        local function clearOld(parent, mark)
-            for _, child in ipairs(parent:GetChildren()) do
-                if child:GetAttribute(mark or MARK) then child:Destroy() end
-            end
         end
 
         local function normCfg(a, b)
@@ -393,11 +385,9 @@ local createCore = (function()
             fmtNum = fmtNum,
             MOUSE_NAMES = MOUSE_NAMES,
             resolveParent = resolveParent,
-            MARK = MARK,
             randomName = randomName,
             nextOrder = nextOrder,
             protectGui = protectGui,
-            clearOld = clearOld,
             normCfg = normCfg,
         }
     end
@@ -580,10 +570,8 @@ local createNotifications = (function()
         local completed = Core.completed
         local measureText = Core.measureText
         local resolveParent = Core.resolveParent
-        local MARK = Core.MARK
         local randomName = Core.randomName
         local protectGui = Core.protectGui
-        local clearOld = Core.clearOld
 
         local TOAST_TYPES = {
             info    = { color = DEFAULT_THEME.Accent,  name = "info" },
@@ -759,7 +747,6 @@ local createNotifications = (function()
             end
             if not self._toastGui or not self._toastGui.Parent then
                 local tparent, viaHidden = resolveParent(nil)
-                clearOld(tparent)
                 self._toastGui = New("ScreenGui", {
                     Name = randomName(),
                     ResetOnSpawn = false,
@@ -767,7 +754,6 @@ local createNotifications = (function()
                     ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
                     DisplayOrder = math.random(900001, 999999),
                 })
-                self._toastGui:SetAttribute(MARK, true)
                 if not viaHidden then protectGui(self._toastGui) end
                 self._toastGui.Parent = tparent
                 self._toastLayer = buildToastLayer(self._toastGui, DEFAULT_THEME)
@@ -2575,11 +2561,9 @@ local createWindow = (function()
         local fmtNum = Core.fmtNum
         local MOUSE_NAMES = Core.MOUSE_NAMES
         local resolveParent = Core.resolveParent
-        local MARK = Core.MARK
         local randomName = Core.randomName
         local nextOrder = Core.nextOrder
         local protectGui = Core.protectGui
-        local clearOld = Core.clearOld
         local normCfg = Core.normCfg
 
         function Reborn:CreateWindow(config)
@@ -2593,13 +2577,6 @@ local createWindow = (function()
             end
 
             local parent, viaHidden = resolveParent(config)
-            for i = #Reborn._windows, 1, -1 do
-                local existing = Reborn._windows[i]
-                if not existing.Gui or existing.Gui.Parent == nil or existing.Gui.Parent == parent then
-                    existing:Destroy()
-                end
-            end
-            clearOld(parent)
 
             local gui = New("ScreenGui", {
                 Name = randomName(),
@@ -2608,7 +2585,6 @@ local createWindow = (function()
                 ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
                 DisplayOrder = nextOrder(),
             })
-            gui:SetAttribute(MARK, true)
             if not viaHidden then protectGui(gui) end
             gui.Parent = parent
 
@@ -3283,7 +3259,7 @@ local createWindow = (function()
                 closeWindow()
                 task.delay(0.22, function()
                     if state.unloading and gui.Parent then
-                        pcall(function() Reborn:Unload() end)
+                        pcall(function() Window:Destroy() end)
                     end
                 end)
             end
@@ -3345,7 +3321,7 @@ local createWindow = (function()
                         TextXAlignment = Enum.TextXAlignment.Left,
                         TextYAlignment = Enum.TextYAlignment.Top,
                         TextWrapped = true,
-                        Text = "Are you sure you want to close the UI? Reborn will be completely unloaded.",
+                        Text = "Are you sure you want to close this window?",
                         Parent = cardFace,
                     })
                     local cancelWrap = New("Frame", {
