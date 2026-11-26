@@ -1,224 +1,138 @@
 # Reborn
 
-A dark, minimalist UI library for Roblox, implemented in a single Luau module.
+A Luau UI library with tabs, sections, configurable controls and notifications.
 
-![version](https://img.shields.io/badge/version-v0.9.8-0070f3)
-
-## Features
-
-- Draggable, resizable window with a pill minimize and viewport snapping
-- Sidebar tabs with optional icons and one- or two-column layouts
-- Toggles, sliders, dropdowns, keybinds, color pickers, text inputs, buttons, paragraphs
-- Multi-select dropdowns, keybind modes (`Always` / `Toggle` / `Hold`), hover tooltips
-- Config system: flags, `GetConfig` / `SetConfig`, JSON save / load / delete / list with executor filesystem persistence
-- Toast notifications (including sticky ones via `Duration <= 0`)
-- Configurable theme
-- 120+ Lucide icons built in, preloaded on startup
-- Randomized instance names, hidden parenting (`gethui` / `protect_gui`), no console output
-- Zero runtime dependencies — one file, plain instances
-
-## Installation
-
-### Executor
+## Usage
 
 ```lua
-local Reborn = loadstring(game:HttpGet(
-    "https://raw.githubusercontent.com/Toluwer/Reborn/main/src/Reborn.luau"
-))()
-```
-
-### Roblox Studio
-
-Create a ModuleScript named `Reborn` and paste `src/Reborn.luau` into it. For development with separate modules, use the `lib` directory as a ModuleScript tree, with `init.luau` as the root and the `Components` directory as a folder of child ModuleScripts.
-
-### Source layout
-
-- `lib/init.luau` — public library entry point
-- `lib/Theme.luau`, `lib/Core.luau`, `lib/Icons.luau` — shared theme, primitives and icons
-- `lib/Window.luau`, `lib/Notifications.luau`, `lib/Config.luau` — window lifecycle, notifications and configuration
-- `lib/Navigation.luau`, `lib/Popovers.luau` — tab and section layout, page transitions, and popup management
-- `lib/Lifecycle.luau` — component ownership, connections, visibility, search and callback guards
-- `lib/InputRouter.luau` — shared input dispatch and pointer capture
-- `lib/Components/` — individual components
-- `src/Reborn.luau` — standalone distribution, kept compatible with the existing URL
-- `examples/basic.luau` — usage example
-
-## Quick start
-
-```lua
-local Reborn = loadstring(game:HttpGet(
-    "https://raw.githubusercontent.com/Toluwer/Reborn/main/src/Reborn.luau"
-))()
+local Reborn = loadstring(game:HttpGet("https://raw.githubusercontent.com/Toluwer/Reborn/main/src/Reborn.luau"))()
 
 local Window = Reborn:CreateWindow({
-    Title = "Reborn",
+    Title = "Example",
     Size = Vector2.new(700, 530),
 })
 
 local Main = Window:Tab("Main", "home")
-local Section = Main:Section("Overview")
+local Section = Main:Section("General")
 
-Section:Paragraph("Hello from Reborn.")
-Section:Button({
-    Text = "Show notification",
-    Primary = true,
-    Callback = function()
-        Reborn:Notify("Hi", "It works.")
+Section:Toggle({
+    Text = "Enabled",
+    Value = false,
+    Flag = "enabled",
+    Callback = function(value)
+        print(value)
     end,
 })
 
-local Visuals = Window:Tab("Visuals", "eye")
-Visuals:SetColumns(2)
-Visuals:Section("ESP")
-Visuals:Section("Environment")
-```
-
-A full example is available at [`examples/basic.luau`](examples/basic.luau).
-
-## API
-
-### Reborn
-
-| Member / method | Description |
-| --- | --- |
-| `Reborn:CreateWindow(config) -> Window` | Creates the window. `config`: `Title`, `Size` (Vector2), `Theme` (partial overrides), `Parent` (ScreenGui/Instance). All fields optional. |
-| `Reborn:Notify(config)` | Shows a toast. Accepts a table (`Title`, `Description`, `Type` (`"info" / "success" / "error"`), `Duration`) or a shorthand: `Notify("Title", "Description")`. |
-| `Reborn.NotificationsEnabled` | Set `false` to mute all toasts. |
-| `Reborn.Theme` | Default theme table. Pass overrides via `CreateWindow`. |
-| `Reborn:Unload()` | Full teardown: destroys every window and the shared toast layer, disconnects all input connections and clears the registries — nothing of the library keeps running. Idempotent. The window's Close button performs exactly this. |
-| `Reborn:Destroy()` | Alias of `Reborn:Unload()`. |
-
-`Reborn:Unload()` is a true unload, not just removing the UI: every `UserInputService` connection dies with it, so half-finished keybind captures and drags stop instantly. Pending one-shot tweens and timers tick once against dead instances at most — they render nothing and create nothing (a debounce callback may still fire once, as in any UI library). A required module cannot evict itself from Roblox's require cache, but after `Unload` Reborn is fully inert: `CreateWindow` / `Notify` start fresh, and once you drop your references to the returned objects the whole library is garbage-collected. Saved configs survive (they live in files or in memory, not in the UI).
-
-### Window
-
-| Method | Description |
-| --- | --- |
-| `Window:Tab(name, icon?) -> Tab` | Adds a sidebar tab with an optional icon name (see Icons below). The first tab is active by default. |
-| `Window:Notify(config)` | Same as `Reborn:Notify`. |
-| `Window:Search(query)` | Filters rows by label and dropdown option text. `""` clears the filter. |
-| `Window:SetTitle(text)` | Updates the header title. |
-| `Window:Toggle()` / `Window:SetVisible(bool)` | Hides or reopens the window. Restores from the minimized pill first. |
-| `Window:Minimize()` | Morphs the window into a compact pill docked at the top-center of the screen — no outline, no window buttons, fully rounded pill radius. Click the pill (or hover it) to expand back. |
-| `Window.ToggleKey = "Right Shift"` | Optional. Key name shown in the pill's hover hint (`"Click or Right Shift to open"`). Set it to your UI-toggle keybind. |
-| `Window:GetConfig() -> table` | Snapshots all flagged element values into a `{ flag = value }` table. |
-| `Window:SetConfig(table)` | Applies values by flag without firing callbacks. |
-| `Window:SaveConfig(name) -> bool` | Encodes the current config as JSON. Persists to `reborn/<title>/<name>.json` via the executor's `writefile` when available, otherwise keeps it in memory. |
-| `Window:LoadConfig(name) -> table?` | Reads and applies a saved config. Returns the applied table, or `nil` if not found. |
-| `Window:DeleteConfig(name) -> bool` | Removes a saved config from disk and memory. |
-| `Window:ListConfigs() -> {string}` | Lists known config names (filesystem entries when `listfiles` exists, plus in-memory ones). |
-| `Window:Destroy()` | Destroys the ScreenGui and disconnects input. |
-
-### Tab
-
-| Method | Description |
-| --- | --- |
-| `Tab:Section(name, badge?) -> Section` | Adds a section. `badge` renders a small chip next to the title. |
-| `Tab:SetColumns(2)` | Switches the page to a two-column layout. Existing sections are redistributed. |
-
-### Icons
-
-Tab icons and all built-in glyphs come from the [Lucide](https://lucide.dev) icon set, embedded as Roblox-hosted sprite assets:
-
-```lua
-Window:Tab("Combat", "crosshair")
-Window:Tab("Visuals", "eye")
-```
-
-A selection of available names: `home`, `crosshair`, `eye`, `settings`, `swords`, `shield`, `target`, `zap`, `star`, `flame`, `skull`, `ghost`, `bomb`, `palette`, `sparkles`, `moon`, `sun`, `cpu`, `wifi`, `lock`, `key`, `terminal`, `radar`, `gamepad-2`, `joystick`, `users`, `heart`, `gem`, `crown`. Any unknown name is ignored and the tab renders without an icon.
-
-### Section
-
-Every component takes a config table and returns an object with a `Set` method (`Image` returns `SetImage`, `List` returns `SetSelected`, and both also answer to `Set` for the config system). `Set(value, fire)` re-fires the callback only when `fire` is `true`. All config fields are optional; omitted values fall back to defaults (e.g. sliders default to `0–100`, dropdowns select the first option).
-
-Every component also accepts `Tooltip` (hover hint), and every returned object exposes `SetVisible(bool)`, `SetTooltip(text)`, `Destroy()` and `SetEnabled(bool)`. Dropdown options keep their original types — a numeric option comes back as a number.
-
-Each component also accepts a string with an optional callback:
-
-```lua
-Section:Toggle("Enable ESP", function(value) end)
-Section:Button("Rejoin", function() end)
-Section:Paragraph("Some text.")
-Section:Image("rbxassetid://12345678")
-```
-
-| Component | Config | Object |
-| --- | --- | --- |
-| `Toggle` | `Text`, `Value` (bool), `Flag`, `Tooltip`, `Callback(value)` | `Set(value, fire?)` |
-| `Slider` | `Text`, `Min`, `Max`, `Step`, `Value`, `Suffix`, `Format` (fn), `Flag`, `Tooltip`, `Callback(value)` | `Set(value, fire?)`, `SetRange(min, max)` |
-| `Dropdown` | `Text`, `Options` (list), `Value`, `Multi` (bool), `Flag`, `Tooltip`, `Callback(selected or list)` | `Set(value, fire?)`, `SetOptions(options)` |
-| `Keybind` | `Text`, `Value`, `Mode` (`"Always" / "Toggle" / "Hold"`), `Flag`, `Tooltip`, `Callback(...)` | `Set(name)` |
-| `ColorPicker` | `Text`, `Value` (`"#RRGGBB"` or `Color3`), `Flag`, `Tooltip`, `Callback(hex, color3)` | `Set(hex, fire?)` |
-| `Input` | `Text`, `Value`, `Placeholder`, `Live` (bool), `Debounce` (seconds), `Flag`, `Tooltip`, `Callback(text, enterPressed)` | `Set(text)` |
-| `Button` | `Text`, `Primary` (bool), `Width`, `Tooltip`, `Callback()` | `Set(text)` |
-| `Paragraph` | `Text` | `Set(text)` |
-| `Image` | `Image` (asset id number, id string, or URL), `Height`, `ScaleType`, `CornerRadius`, `Tooltip`, `Callback()` | `SetImage(source)` |
-| `List` | `Text`, `Height`, `MaxHeight`, `Flag`, `Tooltip`, `SelectionChanged(item, index)` | `Add(item)`, `Remove(index)`, `Clear()`, `SetItems(table)`, `SetSelected(index?, fire?)` |
-
-Images render as full-width plates that follow the window through resize and drag. `Image` accepts a plain asset id number (`12345678`), a bare digit string, or any URL — `rbxassetid://`, `rbxthumb://`, `rbxasset://` and `https://` pass through untouched, while numbers and digit strings are normalized to `rbxassetid://`. `ScaleType` defaults to `Crop` (fills the plate with rounded corners), `Fit` letterboxes inside the plate, `Stretch` distorts to fill. While the asset loads, the plate reads as the standard surface placeholder. A `Callback` turns the plate into a clickable image button with a subtle transparency lift on hover. Flagged images join the config system — `GetConfig` snapshots the applied source string and `SetConfig` restores it.
-
-`SetEnabled(false)` works on every element — Button, Toggle, Slider, Dropdown, Keybind, ColorPicker, Input, Image, List and Paragraph. A disabled element is visibly dimmed (labels at 50% transparency, muted plates), swallows all input (no hover effects, no clicks, keybinds stop firing, inputs stop accepting text, open popovers close and stay closed) and blocks its callback entirely — including programmatic `Set(value, true)`. `SetEnabled(true)` restores appearance and interactivity.
-
-The List element is a scrollable container for rows that change at runtime. Items are tables — `Text` (primary), `Secondary` (smaller muted line), `Icon` (icon name), `Trailing` (right-aligned text) — or plain strings. `Add` returns the new index and touches nothing else; `Remove`/`Clear`/`SetItems` keep the selection consistent (removing the selected row clears it, earlier selections shift down). The selected row uses a subtle accent tint; clicking a row fires `SelectionChanged(item, index)` (also accepted as `Callback`), and `SetSelected(index, fire?)` follows the usual Set convention — pass `nil` to deselect. The plate auto-grows with content from `Height` (default 120, min 46) up to `MaxHeight` (default 260), then scrolls; hundreds of rows are fine — each `Add` is one frame plus a height recompute, and the canvas sizes itself. A flagged List snapshots its selected index (absent when nothing is selected).
-
-`Section:Row()` returns a horizontal container that packs 2-4 elements side by side: `row:Button(...)`, `row:Toggle(...)`, `row:Dropdown(...)`, `row:Keybind(...)` and `row:ColorPicker(...)` take the same configs as their section counterparts. Children without an explicit `Width` share the row evenly (`1/n` each); an explicit `Width` opts a child out of the split. `Gap` sets the spacing (default 8). `SetVisible`/`Destroy` work on the whole row — destroying a row destroys its children.
-
-`Width` also works on standalone elements: a number between 0 and 1 is a fraction of the section width, a number of 1 or more is fixed pixels, `"auto"` hugs the text (Button only), and the default stays full width so existing scripts are unaffected.
-
-Sliders: `Format = function(value) return string end` replaces the value label entirely (the `Suffix` is not appended), and `SetRange(min, max)` changes the range at runtime — the current value is re-snapped and clamped into the new range and re-rendered without firing the callback; invalid ranges (max <= min) are ignored and return `false`.
-
-Inputs: `Debounce = seconds` (with `Live = true`) batches keystroke callbacks — the callback fires once, `Debounce` seconds after the last keystroke; pressing Enter or blurring the field fires immediately and cancels the pending update. Dropdowns: `SetOptions(options)` repopulates after creation — the current value is kept when still present (multi keeps the intersection), otherwise the first option is selected silently, the popover height and search index rebuild, and an open popover closes.
-
-Keybind modes: `Always` fires `Callback(name, input, gameProcessed)` on every press. `Toggle` fires `Callback(active, name, ...)` — `true` on the first press, `false` on the next. `Hold` fires `Callback(true, ...)` on down and `Callback(false, ...)` on release. While listening, `Backspace` clears the bind and `Escape` cancels.
-
-With `Multi = true`, `Value` and the callback carry an array of the selected options in option order; clicking an option toggles it and keeps the popover open.
-
-```lua
-local dd = Section:Dropdown({
-    Text = "Target filters",
-    Multi = true,
-    Value = { "Players" },
-    Options = { "Players", "NPCs", "Team check" },
-    Callback = function(list) print(#list, "selected") end,
+Section:Button({
+    Text = "Notify",
+    Callback = function()
+        Reborn:Notify("Reborn", "Ready")
+    end,
 })
 ```
 
-Flags feed the config system:
+[Full example](examples/basic.luau)
+
+## Window
+
+| Method | Description |
+| --- | --- |
+| `Tab(name, icon?)` | Create a tab. |
+| `SetTitle(text)` | Change the window title. |
+| `SetVisible(visible)` | Show or hide the window. |
+| `Toggle()` | Minimize or restore the window. |
+| `Minimize()` | Minimize to the pill. |
+| `Search(query)` | Filter components. Pass an empty string to clear. |
+| `Notify(config)` | Show a notification. |
+| `Destroy()` | Destroy the window. |
+
+`CreateWindow` accepts `Title`, `Size`, `Theme` and `Parent`.
+
+Use `Reborn:Unload()` to unload the library.
+
+## Tabs and sections
 
 ```lua
-Section:Toggle({ Text = "Aim assist", Value = true, Flag = "aim" })
-Section:Slider({ Text = "FOV", Min = 5, Max = 120, Value = 90, Flag = "fov" })
+local Settings = Window:Tab("Settings", "settings")
+Settings:SetColumns(2)
 
-Window:SaveConfig("main")      -- writes reborn/<title>/main.json
-Window:LoadConfig("main")      -- restores every flagged value
-for _, name in ipairs(Window:ListConfigs()) do print(name) end
+local General = Settings:Section("General")
+local Appearance = Settings:Section("Appearance")
 ```
 
-### Theme
+## Components
 
-Any subset of keys may be overridden:
+| Component | Options |
+| --- | --- |
+| `Button` | Text, Primary, Width, Callback |
+| `Toggle` | Text, Value, Callback |
+| `Slider` | Text, Min, Max, Step, Value, Suffix, Format, Callback |
+| `Dropdown` | Text, Options, Value, Multi, Callback |
+| `Keybind` | Text, Value, Mode, Callback |
+| `ColorPicker` | Text, Value, Callback |
+| `Input` | Text, Value, Placeholder, Live, Debounce, Callback |
+| `Paragraph` | Text |
+| `Image` | Image, Height, ScaleType, CornerRadius, Title, Subtitle, Callback |
+| `List` | Text, Height, MaxHeight, SelectionChanged |
+| `Row` | Gap |
+
+Components support `SetEnabled(bool)`, `SetVisible(bool)`, `SetTooltip(text)` and `Destroy()`.
+
+Use `Set(value, true)` to update a toggle, slider, dropdown or color picker and fire its callback. Omit the second argument for a silent update.
+
+Additional methods:
+
+- Slider: `SetRange(min, max)`
+- Dropdown: `SetOptions(options)`
+- Image: `SetImage(source)`, `SetTitle(text)`, `SetSubtitle(text)`
+- List: `Add(item)`, `Remove(index)`, `Clear()`, `SetItems(items)`, `SetSelected(index, fire?)`
+
+List items accept a string or a table with `Text`, `Secondary`, `Icon` and `Trailing`.
+
+## Configuration
+
+Assign a unique `Flag` to each control you want to save.
 
 ```lua
-Reborn:CreateWindow({
+Section:Slider({
+    Text = "Intensity",
+    Min = 0,
+    Max = 100,
+    Value = 50,
+    Flag = "intensity",
+})
+
+Window:SaveConfig("default")
+Window:LoadConfig("default")
+```
+
+| Method | Description |
+| --- | --- |
+| `GetConfig()` | Return flagged values. |
+| `SetConfig(values)` | Apply flagged values. |
+| `SaveConfig(name)` | Save a profile. |
+| `LoadConfig(name)` | Load a profile. |
+| `DeleteConfig(name)` | Delete a profile. |
+| `ListConfigs()` | List saved profiles. |
+
+Profiles are saved under `reborn/<title>/<name>.json` when filesystem access is available.
+
+## Theme
+
+Override theme colors when creating a window.
+
+```lua
+local Window = Reborn:CreateWindow({
+    Title = "Example",
     Theme = {
         Accent = Color3.fromRGB(44, 103, 197),
-        Text = Color3.fromRGB(244, 244, 244),
     },
 })
 ```
 
-| Key | Value | Key | Value |
-| --- | --- | --- | --- |
-| `Background` | `#111111` | `Line` | `#303030` |
-| `Surface` | `#181818` | `LineStrong` | `#383838` |
-| `Overlay` | `#242424` | `Text` | `#f4f4f4` |
-| `Chip` | `#181818` | `TextMuted` | `#aaaaaa` |
-| `RowHover` | `#2d2d2d` | `TextFaint` | `#777777` |
-| `OptionHover` | `#2d2d2d` | `Accent` | `#2c67c5` |
-| `Success` | `#29d391` | `AccentHover` | `#3b78d7` |
-| `Error` | `#e63c3c` | `ToggleOff` | `#2d2d2d` |
-| `Handle` | `#f4f4f4` | | |
+See [Theme.luau](lib/Theme.luau) for the default colors.
 
 ## Credits
 
-Icons are from [Lucide](https://lucide.dev) (ISC License), rendered via the [lucide-roblox](https://github.com/latte-soft/lucide-roblox) sprite assets.
+Icons: [Lucide](https://lucide.dev) (ISC), [lucide-roblox](https://github.com/latte-soft/lucide-roblox).
