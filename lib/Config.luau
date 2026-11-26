@@ -34,7 +34,7 @@ return function(Reborn, Core, Window, state, config)
 
         if kind == "Toggle" then
             return element.Value == true
-        elseif kind == "Slider" then
+        elseif kind == "Slider" or kind == "ProgressBar" then
             if finite(element.Value) then return element.Value end
         elseif kind == "Dropdown" then
             if entry.cfg.Multi then
@@ -66,7 +66,7 @@ return function(Reborn, Core, Window, state, config)
 
         if kind == "Toggle" then
             if type(value) == "boolean" then element:Set(value, false) end
-        elseif kind == "Slider" then
+        elseif kind == "Slider" or kind == "ProgressBar" then
             local number = tonumber(value)
             if finite(number) then element:Set(number, false) end
         elseif kind == "Dropdown" then

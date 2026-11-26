@@ -15,6 +15,7 @@ return function(context, tabsHolder, content, popovers)
     local normCfg = context.normCfg
     local addToggle = context.addToggle
     local addSlider = context.addSlider
+    local addProgressBar = context.addProgressBar
     local addDropdown = context.addDropdown
     local addKeybind = context.addKeybind
     local addColorPicker = context.addColorPicker
@@ -106,6 +107,7 @@ return function(context, tabsHolder, content, popovers)
 
         function section:Toggle(a, b) return addToggle(section, normCfg(a, b)) end
         function section:Slider(a, b) return addSlider(section, normCfg(a, b)) end
+        function section:ProgressBar(a, b) return addProgressBar(section, normCfg(a, b)) end
         function section:Dropdown(a, b) return addDropdown(section, normCfg(a, b)) end
         function section:Keybind(a, b) return addKeybind(section, normCfg(a, b)) end
         function section:ColorPicker(a, b) return addColorPicker(section, normCfg(a, b)) end

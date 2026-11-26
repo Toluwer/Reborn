@@ -385,6 +385,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
         local componentMethods = {
             Toggle = context.addToggle,
             Slider = context.addSlider,
+            ProgressBar = context.addProgressBar,
             Dropdown = context.addDropdown,
             Keybind = context.addKeybind,
             ColorPicker = context.addColorPicker,

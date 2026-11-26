@@ -113,6 +113,7 @@ return function(Core, Theme, Icons, Components, state, theme, inputRouter, lifec
 
     context.addToggle = Components.Toggle(context)
     context.addSlider = Components.Slider(context)
+    context.addProgressBar = Components.ProgressBar(context)
     context.addDropdown = Components.Dropdown(context)
     context.addKeybind = Components.Keybind(context)
     context.addColorPicker = Components.ColorPicker(context)

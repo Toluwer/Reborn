@@ -91,6 +91,7 @@ local Appearance = Settings:Section("Appearance")
 | `Button` | Text, Primary, Width, Callback |
 | `Toggle` | Text, Value, Callback |
 | `Slider` | Text, Min, Max, Step, Value, Suffix, Format, Callback |
+| `ProgressBar` | Text, Min, Max, Value, Color, ShowValue, Suffix, Format, Duration, Flag |
 | `Dropdown` | Text, Options, Value, Multi, Callback |
 | `Keybind` | Text, Value, Mode, Callback |
 | `ColorPicker` | Text, Value, Callback |
@@ -107,9 +108,12 @@ Use `Set(value, true)` to update a toggle, slider, dropdown or color picker and 
 Additional methods:
 
 - Slider: `SetRange(min, max)`
+- ProgressBar: `Set(value, animate?)`, `SetRange(min, max)`, `SetText(text)`, `SetColor(color)`
 - Dropdown: `SetOptions(options)`
 - Image: `SetImage(source)`, `SetTitle(text)`, `SetSubtitle(text)`
 - List: `Add(item)`, `Remove(index)`, `Clear()`, `SetItems(items)`, `SetSelected(index, fire?)`
+
+Progress bars are read-only. `Set(value)` animates to the new value; `Set(value, false)` updates immediately. The default label displays a percentage of the range. Use `Suffix` or `Format(value, fraction)` to display a custom value.
 
 List items accept a string or a table with `Text`, `Secondary`, `Icon` and `Trailing`.
 

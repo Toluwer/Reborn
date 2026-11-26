@@ -17,6 +17,7 @@ local createTooltip = require(script.Tooltip)
 local Components = {
     Toggle = require(script.Components.Toggle),
     Slider = require(script.Components.Slider),
+    ProgressBar = require(script.Components.ProgressBar),
     Dropdown = require(script.Components.Dropdown),
     Keybind = require(script.Components.Keybind),
     ColorPicker = require(script.Components.ColorPicker),

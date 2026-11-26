@@ -78,12 +78,19 @@ local Clock = Reborn:CreateWidget({
     Resizable = false,
 })
 local Time = Clock:Paragraph(os.date("%H:%M:%S"))
+local Minute = Clock:ProgressBar({
+    Text = "Minute",
+    Max = 60,
+    Value = tonumber(os.date("%S")),
+    Suffix = "s",
+})
 local elapsed = 0
 local connection = game:GetService("RunService").Heartbeat:Connect(function(dt)
     elapsed = elapsed + dt
     if elapsed >= 1 then
         elapsed = 0
         Time:Set(os.date("%H:%M:%S"))
+        Minute:Set(tonumber(os.date("%S")))
     end
 end)
 Clock:AddCleanup(function()

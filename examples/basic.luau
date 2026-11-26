@@ -26,6 +26,11 @@ local Enabled = Controls:Toggle({
     end,
 })
 
+local Progress = Controls:ProgressBar({
+    Text = "Current intensity",
+    Value = 50,
+})
+
 local Amount = Controls:Slider({
     Text = "Intensity",
     Min = 0,
@@ -34,6 +39,7 @@ local Amount = Controls:Slider({
     Suffix = "%",
     Flag = "intensity",
     Callback = function(value)
+        Progress:Set(value)
         updateStatus("Intensity: " .. value .. "%")
     end,
 })
