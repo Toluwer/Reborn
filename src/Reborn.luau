@@ -2634,14 +2634,17 @@ local createWindow = (function()
 
             local Window = nil
 
-            local windowFrame = New("CanvasGroup", {
-                GroupTransparency = 0,
+            local sharp = config.SharpRendering == true
+            local windowFrame = New(sharp and "Frame" or "CanvasGroup", {
                 Name = randomName(),
                 Size = UDim2.new(0, W, 0, H),
                 BackgroundColor3 = theme.Surface,
                 BorderSizePixel = 0,
+                ClipsDescendants = true,
                 Parent = gui,
             })
+            if not sharp then windowFrame.GroupTransparency = 0 end
+            local closedPosition
             local winCorner = corner(windowFrame, GEO.WindowRadius)
             local windowFace = New("Frame", {
                 Position = UDim2.new(0, 1, 0, 1),
@@ -2994,8 +2997,10 @@ local createWindow = (function()
                 state.restoring = not m
                 state.min = m
                 if m then
-                    killTween(windowFrame, "GroupTransparency")
-                    windowFrame.GroupTransparency = 0
+                    if not sharp then
+                        killTween(windowFrame, "GroupTransparency")
+                        windowFrame.GroupTransparency = 0
+                    end
                     inputRouter.Cancel()
                     closeAllPops()
                     if searchWrap.Size.X.Offset > 0 then closeSearch() end
@@ -3093,13 +3098,20 @@ local createWindow = (function()
                 state.closeGeneration = (state.closeGeneration or 0) + 1
                 local generation = state.closeGeneration
                 if not windowFrame.Visible then
-                    windowFrame.GroupTransparency = 1
+                    if not sharp then windowFrame.GroupTransparency = 1 end
                     return
                 end
-                local exit = tween(windowFrame, 0.20, { GroupTransparency = 1 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+                local exit
+                if sharp then
+                    closedPosition = windowFrame.Position
+                    exit = tween(windowFrame, 0.20, { Position = closedPosition + UDim2.fromOffset(0, 14) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+                else
+                    exit = tween(windowFrame, 0.20, { GroupTransparency = 1 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+                end
                 completed(exit, function()
                     if state.closed and state.closeGeneration == generation and not state.destroyed and windowFrame.Parent then
                         windowFrame.Visible = false
+                        if sharp and closedPosition then windowFrame.Position = closedPosition end
                     end
                 end)
             end
@@ -3146,9 +3158,17 @@ local createWindow = (function()
                 if state.min then setMinimized(false) end
                 closeAllPops()
                 state.closeGeneration = (state.closeGeneration or 0) + 1
-                killTween(windowFrame, "GroupTransparency")
-                windowFrame.Visible = true
-                tween(windowFrame, 0.22, { GroupTransparency = 0 }, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+                if sharp then
+                    killTween(windowFrame, "Position")
+                    local target = closedPosition or windowFrame.Position
+                    windowFrame.Position = target + UDim2.fromOffset(0, 14)
+                    windowFrame.Visible = true
+                    tween(windowFrame, 0.22, { Position = target }, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+                else
+                    killTween(windowFrame, "GroupTransparency")
+                    windowFrame.Visible = true
+                    tween(windowFrame, 0.22, { GroupTransparency = 0 }, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+                end
             end
 
             local applyFilter = lifecycle.Search
