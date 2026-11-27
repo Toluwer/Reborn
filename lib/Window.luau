@@ -1,4 +1,4 @@
-return function(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle, createInput, createComponentContext, bindKeybinds, createTooltip)
+return function(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle, createInput, createComponentContext, bindKeybinds, createTooltip, createPillLayout)
     local DEFAULT_THEME = Theme.Default
     local F = Theme.Fonts
     local GEO = Theme.Geometry
@@ -24,11 +24,9 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
     local fmtNum = Core.fmtNum
     local MOUSE_NAMES = Core.MOUSE_NAMES
     local resolveParent = Core.resolveParent
-    local MARK = Core.MARK
     local randomName = Core.randomName
     local nextOrder = Core.nextOrder
     local protectGui = Core.protectGui
-    local clearOld = Core.clearOld
     local normCfg = Core.normCfg
 
     function Reborn:CreateWindow(config)
@@ -42,13 +40,6 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
         end
 
         local parent, viaHidden = resolveParent(config)
-        for i = #Reborn._windows, 1, -1 do
-            local existing = Reborn._windows[i]
-            if not existing.Gui or existing.Gui.Parent == nil or existing.Gui.Parent == parent then
-                existing:Destroy()
-            end
-        end
-        clearOld(parent)
 
         local gui = New("ScreenGui", {
             Name = randomName(),
@@ -57,7 +48,8 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
             DisplayOrder = nextOrder(),
         })
-        gui:SetAttribute(MARK, true)
+        gui:SetAttribute("RebornPillOrder", 0)
+        gui:SetAttribute("RebornPillWidth", 0)
         if not viaHidden then protectGui(gui) end
         gui.Parent = parent
 
@@ -103,14 +95,17 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
 
         local Window = nil
 
-        local windowFrame = New("CanvasGroup", {
-            GroupTransparency = 0,
+        local sharp = config.SharpRendering == true
+        local windowFrame = New(sharp and "Frame" or "CanvasGroup", {
             Name = randomName(),
             Size = UDim2.new(0, W, 0, H),
             BackgroundColor3 = theme.Surface,
             BorderSizePixel = 0,
+            ClipsDescendants = true,
             Parent = gui,
         })
+        if not sharp then windowFrame.GroupTransparency = 0 end
+        local closedPosition
         local winCorner = corner(windowFrame, GEO.WindowRadius)
         local windowFace = New("Frame", {
             Position = UDim2.new(0, 1, 0, 1),
@@ -368,7 +363,39 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             Parent = pillContent,
         })
         local pillClear = false
+        local pillTarget = UDim2.new(0.5, 0, 0, 14)
+        local morphingToPill = false
+        local hoverGeneration = 0
+
+        local function morphPosition(width)
+            return UDim2.fromOffset(
+                viewportSize().X / 2 + pillTarget.X.Offset - width / 2,
+                pillTarget.Y.Offset - 1
+            )
+        end
+
+        local pillLayout = createPillLayout(parent, gui, viewportSize, GEO.PillH, function(position)
+            pillTarget = position
+            if pill.Visible then
+                tween(pill, 0.20, { Position = position }, Enum.EasingStyle.Quint)
+            else
+                pill.Position = position
+                if morphingToPill then
+                    tween(windowFrame, 0.20, { Position = morphPosition(pillRestW + 2) }, Enum.EasingStyle.Quint)
+                end
+            end
+        end)
+        if camera then
+            connect(camera:GetPropertyChangedSignal("ViewportSize"), function()
+                pillLayout.Refresh()
+                if morphingToPill then
+                    tween(windowFrame, 0.20, { Position = morphPosition(pillRestW + 2) }, Enum.EasingStyle.Quint)
+                end
+            end)
+        end
+
         local function snapPillRest()
+            hoverGeneration = hoverGeneration + 1
             killTween(pill, "Size")
             killTween(pillContent, "Size")
             killTween(pillHint, "TextTransparency")
@@ -379,16 +406,24 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             pill.BackgroundColor3 = theme.Surface
         end
         pill.MouseEnter:Connect(function()
+            hoverGeneration = hoverGeneration + 1
+            local generation = hoverGeneration
+            if not state.min or not pill.Visible or state.destroyed then return end
             local key = Window and Window.ToggleKey or config.ToggleKey
             local hint = key and ("Click or " .. tostring(key) .. " to open") or "Click to open"
             pillHint.Text = hint
             local w = 22 + pillTitleW + rnd(measureText(hint, 12, F.Regular)) + 12
+            if generation ~= hoverGeneration or not state.min or not pill.Visible or state.destroyed then return end
+            pillLayout.SetWidth(w)
             tween(pill, 0.2, { Size = UDim2.new(0, w, 0, GEO.PillH) }, Enum.EasingStyle.Quint)
             tween(pillContent, 0.2, { Size = UDim2.new(0, w, 1, 0) }, Enum.EasingStyle.Quint)
             tween(pillHint, 0.2, { TextTransparency = pillClear and 0.55 or 0 })
             tween(pill, 0.2, { BackgroundColor3 = theme.Overlay })
         end)
         pill.MouseLeave:Connect(function()
+            hoverGeneration = hoverGeneration + 1
+            if not state.min or not pill.Visible or state.destroyed then return end
+            pillLayout.SetWidth(pillRestW)
             tween(pill, 0.2, { Size = UDim2.new(0, pillRestW, 0, GEO.PillH) }, Enum.EasingStyle.Quint)
             tween(pillContent, 0.2, { Size = UDim2.new(0, pillRestW, 1, 0) }, Enum.EasingStyle.Quint)
             tween(pillHint, 0.2, { TextTransparency = 1 })
@@ -463,8 +498,10 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             state.restoring = not m
             state.min = m
             if m then
-                killTween(windowFrame, "GroupTransparency")
-                windowFrame.GroupTransparency = 0
+                if not sharp then
+                    killTween(windowFrame, "GroupTransparency")
+                    windowFrame.GroupTransparency = 0
+                end
                 inputRouter.Cancel()
                 closeAllPops()
                 if searchWrap.Size.X.Offset > 0 then closeSearch() end
@@ -478,20 +515,29 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
                 end
                 killTween(windowFrame, "Position")
                 killTween(windowFrame, "Size")
-                local v = viewportSize()
                 local tw = pillRestW + 2
+                pillLayout.SetWidth(pillRestW)
+                morphingToPill = true
+                tween(windowFrame, 0.36, { Position = morphPosition(tw) }, Enum.EasingStyle.Quint)
                 local morph = tween(windowFrame, 0.36, {
                     Size = UDim2.new(0, tw, 0, GEO.PillH + 2),
-                    Position = UDim2.new(0, rnd(v.X / 2 - tw / 2), 0, 13),
                 }, Enum.EasingStyle.Quint)
                 tween(winCorner, 0.36, { CornerRadius = UDim.new(0, GEO.PillH / 2 + 1) }, Enum.EasingStyle.Quint)
                 tween(faceCorner, 0.36, { CornerRadius = UDim.new(0, GEO.PillH / 2) }, Enum.EasingStyle.Quint)
                 tween(windowFrame, 0.24, { BackgroundColor3 = theme.Surface })
                 completed(morph, function()
                     if generation == morphGeneration and state.min and not state.destroyed and windowFrame.Parent then
+                        morphingToPill = false
+                        local center = windowFrame.Position.X.Offset + windowFrame.Size.X.Offset / 2
+                        local y = windowFrame.Position.Y.Offset + 1
+                        killTween(windowFrame, "Position")
                         windowFrame.Visible = false
                         snapPillRest()
+                        pill.Position = UDim2.new(0.5, center - viewportSize().X / 2, 0, y)
                         pill.Visible = true
+                        if pill.Position ~= pillTarget then
+                            tween(pill, 0.20, { Position = pillTarget }, Enum.EasingStyle.Quint)
+                        end
                     end
                 end)
             else
@@ -503,13 +549,17 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
                 killTween(windowFrame, "Position")
                 killTween(windowFrame, "Size")
                 local v = viewportSize()
+                morphingToPill = false
                 if not windowFrame.Visible then
-                    local tw = pillRestW + 2
-                    windowFrame.Position = UDim2.new(0, rnd(v.X / 2 - tw / 2), 0, 13)
+                    local tw = pill.Size.X.Offset + 2
+                    local center = v.X / 2 + pill.Position.X.Offset
+                    windowFrame.Position = UDim2.fromOffset(center - tw / 2, pill.Position.Y.Offset - 1)
                     windowFrame.Size = UDim2.new(0, tw, 0, GEO.PillH + 2)
                     windowFrame.Visible = true
                 end
                 pill.Visible = false
+                killTween(pill, "Position")
+                pillLayout.SetWidth(0)
                 snapPillRest()
                 local tx, ty
                 if state.minPos then
@@ -533,6 +583,10 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             if state.closed or state.destroyed then return end
             state.closed = true
             morphGeneration = morphGeneration + 1
+            morphingToPill = false
+            hoverGeneration = hoverGeneration + 1
+            pillLayout.SetWidth(0)
+            killTween(pill, "Position")
             inputRouter.Cancel()
             closeAllPops()
             if state.min or state.restoring then
@@ -562,13 +616,20 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             state.closeGeneration = (state.closeGeneration or 0) + 1
             local generation = state.closeGeneration
             if not windowFrame.Visible then
-                windowFrame.GroupTransparency = 1
+                if not sharp then windowFrame.GroupTransparency = 1 end
                 return
             end
-            local exit = tween(windowFrame, 0.20, { GroupTransparency = 1 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+            local exit
+            if sharp then
+                closedPosition = windowFrame.Position
+                exit = tween(windowFrame, 0.20, { Position = closedPosition + UDim2.fromOffset(0, 14) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+            else
+                exit = tween(windowFrame, 0.20, { GroupTransparency = 1 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+            end
             completed(exit, function()
                 if state.closed and state.closeGeneration == generation and not state.destroyed and windowFrame.Parent then
                     windowFrame.Visible = false
+                    if sharp and closedPosition then windowFrame.Position = closedPosition end
                 end
             end)
         end
@@ -615,9 +676,17 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             if state.min then setMinimized(false) end
             closeAllPops()
             state.closeGeneration = (state.closeGeneration or 0) + 1
-            killTween(windowFrame, "GroupTransparency")
-            windowFrame.Visible = true
-            tween(windowFrame, 0.22, { GroupTransparency = 0 }, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+            if sharp then
+                killTween(windowFrame, "Position")
+                local target = closedPosition or windowFrame.Position
+                windowFrame.Position = target + UDim2.fromOffset(0, 14)
+                windowFrame.Visible = true
+                tween(windowFrame, 0.22, { Position = target }, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+            else
+                killTween(windowFrame, "GroupTransparency")
+                windowFrame.Visible = true
+                tween(windowFrame, 0.22, { GroupTransparency = 0 }, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+            end
         end
 
         local applyFilter = lifecycle.Search
@@ -732,7 +801,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             closeWindow()
             task.delay(0.22, function()
                 if state.unloading and gui.Parent then
-                    pcall(function() Reborn:Unload() end)
+                    pcall(function() Window:Destroy() end)
                 end
             end)
         end
@@ -794,7 +863,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
                     TextXAlignment = Enum.TextXAlignment.Left,
                     TextYAlignment = Enum.TextYAlignment.Top,
                     TextWrapped = true,
-                    Text = "Are you sure you want to close the UI? Reborn will be completely unloaded.",
+                    Text = "Are you sure you want to close this window?",
                     Parent = cardFace,
                 })
                 local cancelWrap = New("Frame", {
@@ -942,6 +1011,9 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             state.destroyed = true
             state.closed = true
             state.min = false
+            morphingToPill = false
+            hoverGeneration = hoverGeneration + 1
+            pillLayout.Destroy()
             disposeTooltip()
             inputRouter.Destroy()
             for _, connection in ipairs(conns) do

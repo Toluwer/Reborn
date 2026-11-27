@@ -47,7 +47,7 @@ Section:Button({
 | `Notify(config)` | Show a notification. |
 | `Destroy()` | Destroy the window. |
 
-`CreateWindow` accepts `Title`, `Size`, `Theme` and `Parent`.
+`CreateWindow` accepts `Title`, `Size`, `Theme` and `Parent`. Minimized windows sharing a GUI parent arrange their pills in centered rows, including windows created by separate copies of the library.
 
 Use `Reborn:Unload()` to unload the library.
 

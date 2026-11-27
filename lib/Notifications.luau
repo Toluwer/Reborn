@@ -11,10 +11,8 @@ return function(Reborn, Core, Theme, Icons)
     local completed = Core.completed
     local measureText = Core.measureText
     local resolveParent = Core.resolveParent
-    local MARK = Core.MARK
     local randomName = Core.randomName
     local protectGui = Core.protectGui
-    local clearOld = Core.clearOld
 
     local TOAST_TYPES = {
         info    = { color = DEFAULT_THEME.Accent,  name = "info" },
@@ -190,7 +188,6 @@ return function(Reborn, Core, Theme, Icons)
         end
         if not self._toastGui or not self._toastGui.Parent then
             local tparent, viaHidden = resolveParent(nil)
-            clearOld(tparent)
             self._toastGui = New("ScreenGui", {
                 Name = randomName(),
                 ResetOnSpawn = false,
@@ -198,7 +195,6 @@ return function(Reborn, Core, Theme, Icons)
                 ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
                 DisplayOrder = math.random(900001, 999999),
             })
-            self._toastGui:SetAttribute(MARK, true)
             if not viaHidden then protectGui(self._toastGui) end
             self._toastGui.Parent = tparent
             self._toastLayer = buildToastLayer(self._toastGui, DEFAULT_THEME)

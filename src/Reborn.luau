@@ -2538,8 +2538,120 @@ local createWidget = (function()
     end
 end)()
 
+local createPillLayout = (function()
+    local WIDTH = "RebornPillWidth"
+    local ORDER = "RebornPillOrder"
+    local GAP = 8
+
+    return function(parent, gui, viewportSize, pillHeight, onPosition)
+        local watched = {}
+        local destroyed = false
+        local queued = false
+        local position
+
+        local function entries()
+            local result = {}
+            for _, child in ipairs(parent:GetChildren()) do
+                local width = child:GetAttribute(WIDTH)
+                local order = child:GetAttribute(ORDER)
+                if child:IsA("ScreenGui") and type(width) == "number" and width > 0 and type(order) == "number" then
+                    table.insert(result, { gui = child, width = width, order = order })
+                end
+            end
+            table.sort(result, function(a, b)
+                if a.order == b.order then return a.gui.Name < b.gui.Name end
+                return a.order < b.order
+            end)
+            return result
+        end
+
+        local function refresh()
+            if destroyed or gui.Parent ~= parent or (gui:GetAttribute(WIDTH) or 0) <= 0 then return end
+            local active = entries()
+            local limit = math.max(1, viewportSize().X - GAP * 2)
+            local first, y = 1, 14
+            while first <= #active do
+                local last, total = first, active[first].width
+                while last < #active do
+                    local extra = active[last + 1].width + GAP
+                    if total + extra > limit then break end
+                    total = total + extra
+                    last = last + 1
+                end
+                local x = -total / 2
+                for index = first, last do
+                    local item = active[index]
+                    if item.gui == gui then
+                        local nextPosition = UDim2.new(0.5, x + item.width / 2, 0, y)
+                        if nextPosition ~= position then
+                            position = nextPosition
+                            onPosition(position)
+                        end
+                        return
+                    end
+                    x = x + item.width + GAP
+                end
+                first = last + 1
+                y = y + pillHeight + GAP
+            end
+        end
+
+        local function schedule()
+            if destroyed or queued then return end
+            queued = true
+            task.defer(function()
+                queued = false
+                refresh()
+            end)
+        end
+
+        local function watch(child)
+            if watched[child] or not child:IsA("ScreenGui") or child:GetAttribute(ORDER) == nil then return end
+            watched[child] = child:GetAttributeChangedSignal(WIDTH):Connect(schedule)
+        end
+
+        for _, child in ipairs(parent:GetChildren()) do watch(child) end
+        local added = parent.ChildAdded:Connect(function(child)
+            watch(child)
+            schedule()
+        end)
+        local removed = parent.ChildRemoved:Connect(function(child)
+            if watched[child] then
+                watched[child]:Disconnect()
+                watched[child] = nil
+            end
+            schedule()
+        end)
+
+        local function setWidth(width)
+            if destroyed then return end
+            local previous = gui:GetAttribute(WIDTH) or 0
+            if previous <= 0 and width > 0 then
+                local order = 0
+                for _, item in ipairs(entries()) do order = math.max(order, item.order) end
+                gui:SetAttribute(ORDER, order + 1)
+                position = nil
+            end
+            if previous ~= width then gui:SetAttribute(WIDTH, width) end
+            if width > 0 then refresh() else position = nil end
+        end
+
+        local function destroy()
+            if destroyed then return end
+            destroyed = true
+            added:Disconnect()
+            removed:Disconnect()
+            for _, connection in pairs(watched) do connection:Disconnect() end
+            table.clear(watched)
+            if gui.Parent then gui:SetAttribute(WIDTH, 0) end
+        end
+
+        return { SetWidth = setWidth, Refresh = refresh, Destroy = destroy }
+    end
+end)()
+
 local createWindow = (function()
-    return function(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle, createInput, createComponentContext, bindKeybinds, createTooltip)
+    return function(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle, createInput, createComponentContext, bindKeybinds, createTooltip, createPillLayout)
         local DEFAULT_THEME = Theme.Default
         local F = Theme.Fonts
         local GEO = Theme.Geometry
@@ -2589,6 +2701,8 @@ local createWindow = (function()
                 ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
                 DisplayOrder = nextOrder(),
             })
+            gui:SetAttribute("RebornPillOrder", 0)
+            gui:SetAttribute("RebornPillWidth", 0)
             if not viaHidden then protectGui(gui) end
             gui.Parent = parent
 
@@ -2902,7 +3016,39 @@ local createWindow = (function()
                 Parent = pillContent,
             })
             local pillClear = false
+            local pillTarget = UDim2.new(0.5, 0, 0, 14)
+            local morphingToPill = false
+            local hoverGeneration = 0
+
+            local function morphPosition(width)
+                return UDim2.fromOffset(
+                    viewportSize().X / 2 + pillTarget.X.Offset - width / 2,
+                    pillTarget.Y.Offset - 1
+                )
+            end
+
+            local pillLayout = createPillLayout(parent, gui, viewportSize, GEO.PillH, function(position)
+                pillTarget = position
+                if pill.Visible then
+                    tween(pill, 0.20, { Position = position }, Enum.EasingStyle.Quint)
+                else
+                    pill.Position = position
+                    if morphingToPill then
+                        tween(windowFrame, 0.20, { Position = morphPosition(pillRestW + 2) }, Enum.EasingStyle.Quint)
+                    end
+                end
+            end)
+            if camera then
+                connect(camera:GetPropertyChangedSignal("ViewportSize"), function()
+                    pillLayout.Refresh()
+                    if morphingToPill then
+                        tween(windowFrame, 0.20, { Position = morphPosition(pillRestW + 2) }, Enum.EasingStyle.Quint)
+                    end
+                end)
+            end
+
             local function snapPillRest()
+                hoverGeneration = hoverGeneration + 1
                 killTween(pill, "Size")
                 killTween(pillContent, "Size")
                 killTween(pillHint, "TextTransparency")
@@ -2913,16 +3059,24 @@ local createWindow = (function()
                 pill.BackgroundColor3 = theme.Surface
             end
             pill.MouseEnter:Connect(function()
+                hoverGeneration = hoverGeneration + 1
+                local generation = hoverGeneration
+                if not state.min or not pill.Visible or state.destroyed then return end
                 local key = Window and Window.ToggleKey or config.ToggleKey
                 local hint = key and ("Click or " .. tostring(key) .. " to open") or "Click to open"
                 pillHint.Text = hint
                 local w = 22 + pillTitleW + rnd(measureText(hint, 12, F.Regular)) + 12
+                if generation ~= hoverGeneration or not state.min or not pill.Visible or state.destroyed then return end
+                pillLayout.SetWidth(w)
                 tween(pill, 0.2, { Size = UDim2.new(0, w, 0, GEO.PillH) }, Enum.EasingStyle.Quint)
                 tween(pillContent, 0.2, { Size = UDim2.new(0, w, 1, 0) }, Enum.EasingStyle.Quint)
                 tween(pillHint, 0.2, { TextTransparency = pillClear and 0.55 or 0 })
                 tween(pill, 0.2, { BackgroundColor3 = theme.Overlay })
             end)
             pill.MouseLeave:Connect(function()
+                hoverGeneration = hoverGeneration + 1
+                if not state.min or not pill.Visible or state.destroyed then return end
+                pillLayout.SetWidth(pillRestW)
                 tween(pill, 0.2, { Size = UDim2.new(0, pillRestW, 0, GEO.PillH) }, Enum.EasingStyle.Quint)
                 tween(pillContent, 0.2, { Size = UDim2.new(0, pillRestW, 1, 0) }, Enum.EasingStyle.Quint)
                 tween(pillHint, 0.2, { TextTransparency = 1 })
@@ -3014,20 +3168,29 @@ local createWindow = (function()
                     end
                     killTween(windowFrame, "Position")
                     killTween(windowFrame, "Size")
-                    local v = viewportSize()
                     local tw = pillRestW + 2
+                    pillLayout.SetWidth(pillRestW)
+                    morphingToPill = true
+                    tween(windowFrame, 0.36, { Position = morphPosition(tw) }, Enum.EasingStyle.Quint)
                     local morph = tween(windowFrame, 0.36, {
                         Size = UDim2.new(0, tw, 0, GEO.PillH + 2),
-                        Position = UDim2.new(0, rnd(v.X / 2 - tw / 2), 0, 13),
                     }, Enum.EasingStyle.Quint)
                     tween(winCorner, 0.36, { CornerRadius = UDim.new(0, GEO.PillH / 2 + 1) }, Enum.EasingStyle.Quint)
                     tween(faceCorner, 0.36, { CornerRadius = UDim.new(0, GEO.PillH / 2) }, Enum.EasingStyle.Quint)
                     tween(windowFrame, 0.24, { BackgroundColor3 = theme.Surface })
                     completed(morph, function()
                         if generation == morphGeneration and state.min and not state.destroyed and windowFrame.Parent then
+                            morphingToPill = false
+                            local center = windowFrame.Position.X.Offset + windowFrame.Size.X.Offset / 2
+                            local y = windowFrame.Position.Y.Offset + 1
+                            killTween(windowFrame, "Position")
                             windowFrame.Visible = false
                             snapPillRest()
+                            pill.Position = UDim2.new(0.5, center - viewportSize().X / 2, 0, y)
                             pill.Visible = true
+                            if pill.Position ~= pillTarget then
+                                tween(pill, 0.20, { Position = pillTarget }, Enum.EasingStyle.Quint)
+                            end
                         end
                     end)
                 else
@@ -3039,13 +3202,17 @@ local createWindow = (function()
                     killTween(windowFrame, "Position")
                     killTween(windowFrame, "Size")
                     local v = viewportSize()
+                    morphingToPill = false
                     if not windowFrame.Visible then
-                        local tw = pillRestW + 2
-                        windowFrame.Position = UDim2.new(0, rnd(v.X / 2 - tw / 2), 0, 13)
+                        local tw = pill.Size.X.Offset + 2
+                        local center = v.X / 2 + pill.Position.X.Offset
+                        windowFrame.Position = UDim2.fromOffset(center - tw / 2, pill.Position.Y.Offset - 1)
                         windowFrame.Size = UDim2.new(0, tw, 0, GEO.PillH + 2)
                         windowFrame.Visible = true
                     end
                     pill.Visible = false
+                    killTween(pill, "Position")
+                    pillLayout.SetWidth(0)
                     snapPillRest()
                     local tx, ty
                     if state.minPos then
@@ -3069,6 +3236,10 @@ local createWindow = (function()
                 if state.closed or state.destroyed then return end
                 state.closed = true
                 morphGeneration = morphGeneration + 1
+                morphingToPill = false
+                hoverGeneration = hoverGeneration + 1
+                pillLayout.SetWidth(0)
+                killTween(pill, "Position")
                 inputRouter.Cancel()
                 closeAllPops()
                 if state.min or state.restoring then
@@ -3493,6 +3664,9 @@ local createWindow = (function()
                 state.destroyed = true
                 state.closed = true
                 state.min = false
+                morphingToPill = false
+                hoverGeneration = hoverGeneration + 1
+                pillLayout.Destroy()
                 disposeTooltip()
                 inputRouter.Destroy()
                 for _, connection in ipairs(conns) do
@@ -5739,7 +5913,7 @@ Reborn.Theme = Theme.Default
 local Core = createCore(Theme, createAnimation)
 local Icons = createIcons(Core)
 local Notifications = createNotifications(Reborn, Core, Theme, Icons)
-createWindow(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle, createInput, createComponentContext, bindKeybinds, createTooltip)
+createWindow(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle, createInput, createComponentContext, bindKeybinds, createTooltip, createPillLayout)
 createWidget(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createPopovers, createLifecycle, createInput, createComponentContext, bindKeybinds, createTooltip)
 
 function Reborn:Unload()

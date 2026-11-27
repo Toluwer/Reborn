@@ -13,6 +13,7 @@ local createComponentContext = require(script.ComponentContext)
 local bindKeybinds = require(script.Keybinds)
 local createWidget = require(script.Widget)
 local createTooltip = require(script.Tooltip)
+local createPillLayout = require(script.PillLayout)
 
 local Components = {
     Toggle = require(script.Components.Toggle),
@@ -41,7 +42,7 @@ Reborn.Theme = Theme.Default
 local Core = createCore(Theme, createAnimation)
 local Icons = createIcons(Core)
 local Notifications = createNotifications(Reborn, Core, Theme, Icons)
-createWindow(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle, createInput, createComponentContext, bindKeybinds, createTooltip)
+createWindow(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle, createInput, createComponentContext, bindKeybinds, createTooltip, createPillLayout)
 createWidget(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createPopovers, createLifecycle, createInput, createComponentContext, bindKeybinds, createTooltip)
 
 function Reborn:Unload()
