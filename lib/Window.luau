@@ -95,8 +95,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
 
         local Window = nil
 
-        local sharp = config.SharpRendering == true
-        local windowFrame = New(sharp and "Frame" or "CanvasGroup", {
+        local windowFrame = New("Frame", {
             Name = randomName(),
             Size = UDim2.new(0, W, 0, H),
             BackgroundColor3 = theme.Surface,
@@ -104,7 +103,6 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             ClipsDescendants = true,
             Parent = gui,
         })
-        if not sharp then windowFrame.GroupTransparency = 0 end
         local closedPosition
         local winCorner = corner(windowFrame, GEO.WindowRadius)
         local windowFace = New("Frame", {
@@ -498,10 +496,6 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             state.restoring = not m
             state.min = m
             if m then
-                if not sharp then
-                    killTween(windowFrame, "GroupTransparency")
-                    windowFrame.GroupTransparency = 0
-                end
                 inputRouter.Cancel()
                 closeAllPops()
                 if searchWrap.Size.X.Offset > 0 then closeSearch() end
@@ -616,20 +610,14 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             state.closeGeneration = (state.closeGeneration or 0) + 1
             local generation = state.closeGeneration
             if not windowFrame.Visible then
-                if not sharp then windowFrame.GroupTransparency = 1 end
                 return
             end
-            local exit
-            if sharp then
-                closedPosition = windowFrame.Position
-                exit = tween(windowFrame, 0.20, { Position = closedPosition + UDim2.fromOffset(0, 14) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-            else
-                exit = tween(windowFrame, 0.20, { GroupTransparency = 1 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-            end
+            closedPosition = windowFrame.Position
+            local exit = tween(windowFrame, 0.20, { Position = closedPosition + UDim2.fromOffset(0, 14) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
             completed(exit, function()
                 if state.closed and state.closeGeneration == generation and not state.destroyed and windowFrame.Parent then
                     windowFrame.Visible = false
-                    if sharp and closedPosition then windowFrame.Position = closedPosition end
+                    if closedPosition then windowFrame.Position = closedPosition end
                 end
             end)
         end
@@ -676,17 +664,11 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             if state.min then setMinimized(false) end
             closeAllPops()
             state.closeGeneration = (state.closeGeneration or 0) + 1
-            if sharp then
-                killTween(windowFrame, "Position")
-                local target = closedPosition or windowFrame.Position
-                windowFrame.Position = target + UDim2.fromOffset(0, 14)
-                windowFrame.Visible = true
-                tween(windowFrame, 0.22, { Position = target }, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
-            else
-                killTween(windowFrame, "GroupTransparency")
-                windowFrame.Visible = true
-                tween(windowFrame, 0.22, { GroupTransparency = 0 }, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
-            end
+            killTween(windowFrame, "Position")
+            local target = closedPosition or windowFrame.Position
+            windowFrame.Position = target + UDim2.fromOffset(0, 14)
+            windowFrame.Visible = true
+            tween(windowFrame, 0.22, { Position = target }, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
         end
 
         local applyFilter = lifecycle.Search
@@ -786,7 +768,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             confirmGeneration = confirmGeneration + 1
             local generation = confirmGeneration
             tween(scrim, 0.15, { BackgroundTransparency = 1 })
-            local exit = tween(card, 0.15, { Position = UDim2.new(0.5, 0, 0.5, 8), GroupTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+            local exit = tween(card, 0.15, { Position = UDim2.new(0.5, 0, 0.5, 8) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
             completed(exit, function()
                 if generation == confirmGeneration and not confirmActive and not state.destroyed and card.Parent then
                     card.Visible = false
@@ -822,8 +804,8 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
                     Parent = windowFace,
                 })
                 corner(scrim, GEO.WindowRadius - 1)
-                card = New("CanvasGroup", {
-                    GroupTransparency = 1,
+                card = New("Frame", {
+                    ClipsDescendants = true,
                     AnchorPoint = Vector2.new(0.5, 0.5),
                     Position = UDim2.new(0.5, 0, 0.5, 0),
                     Size = UDim2.new(0, 420, 0, 156),
@@ -932,12 +914,11 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             if not card.Visible then
                 scrim.BackgroundTransparency = 1
                 card.Position = UDim2.new(0.5, 0, 0.5, 8)
-                card.GroupTransparency = 1
             end
             scrim.Visible = true
             card.Visible = true
             tween(scrim, 0.20, { BackgroundTransparency = 0.42 })
-            tween(card, 0.23, { Position = UDim2.new(0.5, 0, 0.5, 0), GroupTransparency = 0 }, Enum.EasingStyle.Quart)
+            tween(card, 0.23, { Position = UDim2.new(0.5, 0, 0.5, 0) }, Enum.EasingStyle.Quart)
         end
 
         closeBtn.Activated:Connect(showConfirm)

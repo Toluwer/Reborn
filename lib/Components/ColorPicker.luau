@@ -73,8 +73,8 @@ return function(ctx)
         corner(swatchFace, 6)
 
         local popH = 22 + GEO.SVH + 10 + GEO.Swatch
-        local pop = New("CanvasGroup", {
-            GroupTransparency = 1,
+        local pop = New("Frame", {
+            ClipsDescendants = true,
             AnchorPoint = Vector2.new(1, 0),
             Position = UDim2.new(1, -GEO.RowPad, 0, GEO.RowH + 6),
             Size = UDim2.new(0, GEO.PopW, 0, popH),
@@ -294,19 +294,16 @@ return function(ctx)
                 local x, y, cappedH = mountPop(row, pop, popH, GEO.PopW, true)
                 direction = y < row.AbsolutePosition.Y and 1 or -1
                 if not pop.Visible then
-                    pop.GroupTransparency = 1
                     pop.Position = UDim2.new(0, x, 0, y + direction * 6)
                 end
                 pop.Visible = true
                 tween(pop, 0.22, { Position = UDim2.new(0, x, 0, y) }, Enum.EasingStyle.Quart)
-                tween(pop, 0.18, { GroupTransparency = 0 }, Enum.EasingStyle.Sine)
                 registerPop(row, pop, setOpen, cappedH, GEO.PopW, true)
             else
                 inputRouter.Cancel(row)
                 unregisterPop(pop)
                 local pos = pop.Position
-                tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + direction * 4) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-                local exit = tween(pop, 0.15, { GroupTransparency = 1 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+                local exit = tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + direction * 4) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
                 completed(exit, function()
                     if generation == transition and not open and pop.Parent then
                         pop.Visible = false

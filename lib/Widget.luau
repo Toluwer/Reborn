@@ -62,11 +62,10 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
         local offset = #Reborn._widgets * 24
         local position = typeof(config.Position) == "Vector2" and config.Position or Vector2.new(24 + offset, 70 + offset)
 
-        local panel = New("CanvasGroup", {
+        local panel = New("Frame", {
             Position = UDim2.fromOffset(position.X, position.Y),
             Size = UDim2.fromOffset(width, HEADER + INSET * 2),
             BackgroundColor3 = theme.Surface,
-            GroupTransparency = 1,
             BorderSizePixel = 0,
             ClipsDescendants = true,
             Active = true,
@@ -170,6 +169,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
         local targetHeight = HEADER + INSET * 2
         local generation = 0
         local function constrainPosition()
+            killTween(panel, "Position")
             local viewport = viewportSize()
             local x = math.clamp(panel.Position.X.Offset, 0, math.max(0, viewport.X - width))
             local y = math.clamp(panel.Position.Y.Offset, 0, math.max(0, viewport.Y - HEADER))
@@ -212,6 +212,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
         dragZone.InputBegan:Connect(function(input)
             if state.destroyed or not router.IsPointer(input) then return end
             local start = input.Position
+            killTween(panel, "Position")
             local origin = panel.Position
             if router.Begin(panel, input, function(movement)
                 local delta = movement.Position - start
@@ -323,7 +324,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             stop()
             if finalized or not gui.Parent then return end
             killTween(panel, "Size")
-            local exit = tween(panel, 0.16, { GroupTransparency = 1 }, Enum.EasingStyle.Sine)
+            local exit = tween(panel, 0.16, { Position = panel.Position + UDim2.fromOffset(0, 8) }, Enum.EasingStyle.Sine)
             completed(exit, function() finalize(false) end)
         end
 
@@ -412,7 +413,9 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
         table.insert(Reborn._widgets, Widget)
         updateLayout(false)
         constrainPosition()
-        tween(panel, 0.20, { GroupTransparency = 0 }, Enum.EasingStyle.Sine)
+        local target = panel.Position
+        panel.Position = target - UDim2.fromOffset(0, math.min(8, target.Y.Offset))
+        tween(panel, 0.20, { Position = target }, Enum.EasingStyle.Sine)
         return Widget
     end
 end

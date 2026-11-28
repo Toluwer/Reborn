@@ -69,8 +69,7 @@ return function(ctx)
             dd = { Value = initial }
         end
         local popH = 10 + math.max(#options, 1) * GEO.OptH
-        local pop = New("CanvasGroup", {
-            GroupTransparency = 1,
+        local pop = New("Frame", {
             ClipsDescendants = true,
             Position = UDim2.new(0, 0, 1, 6),
             Size = UDim2.new(1, 0, 0, popH),
@@ -177,19 +176,16 @@ return function(ctx)
                 listScroll.CanvasPosition = Vector2.new(0, 0)
                 local offset = y < row.AbsolutePosition.Y and 7 or -7
                 if not pop.Visible then
-                    pop.GroupTransparency = 1
                     pop.Position = UDim2.new(0, x, 0, y + offset)
                 end
                 pop.Visible = true
                 tween(pop, 0.22, { Position = UDim2.new(0, x, 0, y) }, Enum.EasingStyle.Quart)
-                tween(pop, 0.20, { GroupTransparency = 0 }, Enum.EasingStyle.Quad)
                 tween(chev, 0.20, { Rotation = 180 }, Enum.EasingStyle.Quart)
                 registerPop(row, pop, setOpen, cappedH)
             else
                 local pos = pop.Position
                 local offset = pos.Y.Offset < row.AbsolutePosition.Y and 6 or -6
-                tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + offset) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-                local exit = tween(pop, 0.15, { GroupTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+                local exit = tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + offset) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
                 completed(exit, function()
                     if generation == transition and not dd._open and pop.Parent then pop.Visible = false end
                 end)
