@@ -283,6 +283,7 @@ return function(ctx)
         bindPad(hue, applyHue)
 
         local transition = 0
+        local popFade = ctx.fade(pop)
         local direction = -1
         local function setOpen(o)
             if open == o then return end
@@ -295,16 +296,20 @@ return function(ctx)
                 direction = y < row.AbsolutePosition.Y and 1 or -1
                 if not pop.Visible then
                     pop.Position = UDim2.new(0, x, 0, y + direction * 6)
+                    popFade.Set(1)
                 end
                 pop.Visible = true
+                pop.Interactable = true
+                popFade.Play(0, 0.18, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
                 tween(pop, 0.22, { Position = UDim2.new(0, x, 0, y) }, Enum.EasingStyle.Quart)
                 registerPop(row, pop, setOpen, cappedH, GEO.PopW, true)
             else
                 inputRouter.Cancel(row)
                 unregisterPop(pop)
                 local pos = pop.Position
-                local exit = tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + direction * 4) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-                completed(exit, function()
+                pop.Interactable = false
+                tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + direction * 4) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+                popFade.Play(1, 0.15, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, function()
                     if generation == transition and not open and pop.Parent then
                         pop.Visible = false
                     end

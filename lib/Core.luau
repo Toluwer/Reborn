@@ -1,4 +1,4 @@
-return function(Theme, createAnimation)
+return function(Theme, createAnimation, createFade)
     local F = Theme.Fonts
 
     local TweenService = game:GetService("TweenService")
@@ -170,8 +170,6 @@ return function(Theme, createAnimation)
         error("Reborn: no usable GUI parent (no gethui, no CoreGui access, no LocalPlayer) — pass config.Parent")
     end
 
-    local MARK = "__r"
-
     local function randomName()
         local t = {}
         for i = 1, 12 do
@@ -194,12 +192,6 @@ return function(Theme, createAnimation)
         pcall(function()
             if protect_gui then protect_gui(g) end
         end)
-    end
-
-    local function clearOld(parent, mark)
-        for _, child in ipairs(parent:GetChildren()) do
-            if child:GetAttribute(mark or MARK) then child:Destroy() end
-        end
     end
 
     local function normCfg(a, b)
@@ -233,6 +225,7 @@ return function(Theme, createAnimation)
         tween = tween,
         killTween = killTween,
         completed = motion.Completed,
+        fade = createFade(tween, killTween, motion.Completed),
         measureText = measureText,
         colorToHex = colorToHex,
         hexToColor = hexToColor,
@@ -240,11 +233,9 @@ return function(Theme, createAnimation)
         fmtNum = fmtNum,
         MOUSE_NAMES = MOUSE_NAMES,
         resolveParent = resolveParent,
-        MARK = MARK,
         randomName = randomName,
         nextOrder = nextOrder,
         protectGui = protectGui,
-        clearOld = clearOld,
         normCfg = normCfg,
     }
 end

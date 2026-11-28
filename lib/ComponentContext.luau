@@ -91,6 +91,7 @@ return function(Core, Theme, Icons, Components, state, theme, inputRouter, lifec
         icon = Icons.Create,
         killTween = killTween,
         completed = Core.completed,
+        fade = Core.fade,
         list = Core.list,
         makeRow = makeRow,
         measureText = Core.measureText,

@@ -103,7 +103,8 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             ClipsDescendants = true,
             Parent = gui,
         })
-        local closedPosition
+        local windowFade = Core.fade(windowFrame)
+        local confirmFade, settleConfirm
         local winCorner = corner(windowFrame, GEO.WindowRadius)
         local windowFace = New("Frame", {
             Position = UDim2.new(0, 1, 0, 1),
@@ -496,6 +497,8 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             state.restoring = not m
             state.min = m
             if m then
+                windowFade.Reset()
+                windowFrame.Interactable = true
                 inputRouter.Cancel()
                 closeAllPops()
                 if searchWrap.Size.X.Offset > 0 then closeSearch() end
@@ -612,12 +615,11 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             if not windowFrame.Visible then
                 return
             end
-            closedPosition = windowFrame.Position
-            local exit = tween(windowFrame, 0.20, { Position = closedPosition + UDim2.fromOffset(0, 14) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-            completed(exit, function()
+            if settleConfirm then settleConfirm() end
+            windowFrame.Interactable = false
+            windowFade.Play(1, 0.20, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, function()
                 if state.closed and state.closeGeneration == generation and not state.destroyed and windowFrame.Parent then
                     windowFrame.Visible = false
-                    if closedPosition then windowFrame.Position = closedPosition end
                 end
             end)
         end
@@ -664,11 +666,12 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             if state.min then setMinimized(false) end
             closeAllPops()
             state.closeGeneration = (state.closeGeneration or 0) + 1
-            killTween(windowFrame, "Position")
-            local target = closedPosition or windowFrame.Position
-            windowFrame.Position = target + UDim2.fromOffset(0, 14)
+            if not windowFrame.Visible then windowFade.Set(1) end
             windowFrame.Visible = true
-            tween(windowFrame, 0.22, { Position = target }, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+            windowFrame.Interactable = false
+            windowFade.Play(0, 0.22, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, function()
+                if not state.closed and not state.destroyed then windowFrame.Interactable = true end
+            end)
         end
 
         local applyFilter = lifecycle.Search
@@ -762,14 +765,30 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
         local confirmGeneration = 0
         local scrim, card
 
+        settleConfirm = function()
+            if not card then return end
+            confirmGeneration = confirmGeneration + 1
+            confirmFade.Reset()
+            killTween(card, "Position")
+            killTween(scrim, "BackgroundTransparency")
+            if confirmActive then
+                card.Position = UDim2.new(0.5, 0, 0.5, 0)
+                scrim.BackgroundTransparency = 0.42
+            else
+                card.Visible = false
+                scrim.Visible = false
+            end
+        end
+
         local function hideConfirm()
             if not confirmActive or state.unloading then return end
             confirmActive = false
             confirmGeneration = confirmGeneration + 1
             local generation = confirmGeneration
             tween(scrim, 0.15, { BackgroundTransparency = 1 })
-            local exit = tween(card, 0.15, { Position = UDim2.new(0.5, 0, 0.5, 8) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-            completed(exit, function()
+            card.Interactable = false
+            tween(card, 0.15, { Position = UDim2.new(0.5, 0, 0.5, 8) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+            confirmFade.Play(1, 0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.In, function()
                 if generation == confirmGeneration and not confirmActive and not state.destroyed and card.Parent then
                     card.Visible = false
                     scrim.Visible = false
@@ -907,6 +926,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
                 end)
                 cancelB.Activated:Connect(hideConfirm)
                 closeB.Activated:Connect(unloadNow)
+                confirmFade = Core.fade(card)
             end
             confirmActive = true
             confirmGeneration = confirmGeneration + 1
@@ -914,9 +934,12 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             if not card.Visible then
                 scrim.BackgroundTransparency = 1
                 card.Position = UDim2.new(0.5, 0, 0.5, 8)
+                confirmFade.Set(1)
             end
             scrim.Visible = true
             card.Visible = true
+            card.Interactable = true
+            confirmFade.Play(0, 0.23, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
             tween(scrim, 0.20, { BackgroundTransparency = 0.42 })
             tween(card, 0.23, { Position = UDim2.new(0.5, 0, 0.5, 0) }, Enum.EasingStyle.Quart)
         end

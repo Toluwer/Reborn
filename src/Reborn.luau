@@ -150,8 +150,131 @@ local createAnimation = (function()
     end
 end)()
 
+local createFade = (function()
+    return function(tween, killTween, completed)
+        local function capture(instance)
+            local fields = {}
+            local function add(name)
+                local value = instance[name]
+                fields[name] = { base = value, last = value }
+            end
+            if instance:IsA("GuiObject") then add("BackgroundTransparency") end
+            if instance:IsA("TextLabel") or instance:IsA("TextButton") or instance:IsA("TextBox") then
+                add("TextTransparency")
+                add("TextStrokeTransparency")
+            end
+            if instance:IsA("ImageLabel") or instance:IsA("ImageButton") then add("ImageTransparency") end
+            if instance:IsA("ScrollingFrame") then add("ScrollBarImageTransparency") end
+            if instance:IsA("UIStroke") then add("Transparency") end
+            return next(fields) and fields or nil
+        end
+
+        local function apply(instance, fields, alpha)
+            for name, field in pairs(fields) do
+                local current = instance[name]
+                if current ~= field.last then field.base = current end
+                local value = field.base + (1 - field.base) * alpha
+                if current ~= value then instance[name] = value end
+                field.last = instance[name]
+            end
+        end
+
+        local function restore(instance, fields)
+            for name, field in pairs(fields) do
+                if instance[name] == field.last then instance[name] = field.base end
+            end
+        end
+
+        return function(root)
+            local driver
+            local records = {}
+            local connections = {}
+            local generation = 0
+            local destroyed = false
+
+            local function render(alpha)
+                for instance, fields in pairs(records) do
+                    if instance == root or instance:IsDescendantOf(root) then
+                        apply(instance, fields, alpha)
+                    else
+                        records[instance] = nil
+                    end
+                end
+            end
+
+            local function reset(restoreProperties)
+                generation = generation + 1
+                if not driver then return end
+                killTween(driver, "Value")
+                for _, connection in ipairs(connections) do connection:Disconnect() end
+                table.clear(connections)
+                if restoreProperties ~= false then
+                    for instance, fields in pairs(records) do
+                        if instance == root or instance:IsDescendantOf(root) then restore(instance, fields) end
+                    end
+                end
+                table.clear(records)
+                driver:Destroy()
+                driver = nil
+            end
+
+            local function start()
+                if driver then return end
+                driver = Instance.new("NumberValue")
+                records[root] = capture(root)
+                for _, instance in ipairs(root:GetDescendants()) do records[instance] = capture(instance) end
+                table.insert(connections, driver:GetPropertyChangedSignal("Value"):Connect(function()
+                    if driver and not destroyed then render(driver.Value) end
+                end))
+                table.insert(connections, root.DescendantAdded:Connect(function(instance)
+                    if not driver or destroyed or not instance:IsDescendantOf(root) or records[instance] then return end
+                    local fields = capture(instance)
+                    if fields then
+                        records[instance] = fields
+                        apply(instance, fields, driver.Value)
+                    end
+                end))
+                table.insert(connections, root.DescendantRemoving:Connect(function(instance)
+                    local fields = records[instance]
+                    records[instance] = nil
+                    if fields and not destroyed then restore(instance, fields) end
+                end))
+            end
+
+            local function set(alpha)
+                if destroyed then return end
+                start()
+                generation = generation + 1
+                killTween(driver, "Value")
+                driver.Value = math.clamp(alpha, 0, 1)
+                render(driver.Value)
+            end
+
+            local function play(alpha, duration, style, direction, callback)
+                if destroyed then return end
+                start()
+                generation = generation + 1
+                local current = generation
+                local animation = tween(driver, duration, { Value = alpha }, style, direction)
+                completed(animation, function()
+                    if destroyed or generation ~= current then return end
+                    render(alpha)
+                    if callback then callback() end
+                    if not destroyed and generation == current then reset() end
+                end)
+            end
+
+            root.Destroying:Connect(function()
+                destroyed = true
+                reset(false)
+            end)
+            return { Set = set, Play = play, Reset = reset }
+        end
+    end
+end)()
+
 local createCore = (function()
-    return function(Theme, createAnimation)
+    return function(Theme, createAnimation, createFade)
         local F = Theme.Fonts
 
         local TweenService = game:GetService("TweenService")
@@ -378,6 +501,7 @@ local createCore = (function()
             tween = tween,
             killTween = killTween,
             completed = motion.Completed,
+            fade = createFade(tween, killTween, motion.Completed),
             measureText = measureText,
             colorToHex = colorToHex,
             hexToColor = hexToColor,
@@ -1902,6 +2026,7 @@ local createComponentContext = (function()
             icon = Icons.Create,
             killTween = killTween,
             completed = Core.completed,
+            fade = Core.fade,
             list = Core.list,
             makeRow = makeRow,
             measureText = Core.measureText,
@@ -2192,6 +2317,7 @@ local createWidget = (function()
                 Parent = gui,
             })
             corner(panel, GEO.WindowRadius)
+            local panelFade = Core.fade(panel)
             local header = New("Frame", {
                 Size = UDim2.new(1, 0, 0, HEADER),
                 BackgroundTransparency = 1,
@@ -2444,8 +2570,9 @@ local createWidget = (function()
                 stop()
                 if finalized or not gui.Parent then return end
                 killTween(panel, "Size")
-                local exit = tween(panel, 0.16, { Position = panel.Position + UDim2.fromOffset(0, 8) }, Enum.EasingStyle.Sine)
-                completed(exit, function() finalize(false) end)
+                panelFade.Play(1, 0.16, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, function()
+                    finalize(false)
+                end)
             end
 
             function Widget:Destroy()
@@ -2533,9 +2660,8 @@ local createWidget = (function()
             table.insert(Reborn._widgets, Widget)
             updateLayout(false)
             constrainPosition()
-            local target = panel.Position
-            panel.Position = target - UDim2.fromOffset(0, math.min(8, target.Y.Offset))
-            tween(panel, 0.20, { Position = target }, Enum.EasingStyle.Sine)
+            panelFade.Set(1)
+            panelFade.Play(0, 0.20, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
             return Widget
         end
     end
@@ -2759,7 +2885,8 @@ local createWindow = (function()
                 ClipsDescendants = true,
                 Parent = gui,
             })
-            local closedPosition
+            local windowFade = Core.fade(windowFrame)
+            local confirmFade, settleConfirm
             local winCorner = corner(windowFrame, GEO.WindowRadius)
             local windowFace = New("Frame", {
                 Position = UDim2.new(0, 1, 0, 1),
@@ -3152,6 +3279,8 @@ local createWindow = (function()
                 state.restoring = not m
                 state.min = m
                 if m then
+                    windowFade.Reset()
+                    windowFrame.Interactable = true
                     inputRouter.Cancel()
                     closeAllPops()
                     if searchWrap.Size.X.Offset > 0 then closeSearch() end
@@ -3268,12 +3397,11 @@ local createWindow = (function()
                 if not windowFrame.Visible then
                     return
                 end
-                closedPosition = windowFrame.Position
-                local exit = tween(windowFrame, 0.20, { Position = closedPosition + UDim2.fromOffset(0, 14) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-                completed(exit, function()
+                if settleConfirm then settleConfirm() end
+                windowFrame.Interactable = false
+                windowFade.Play(1, 0.20, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, function()
                     if state.closed and state.closeGeneration == generation and not state.destroyed and windowFrame.Parent then
                         windowFrame.Visible = false
-                        if closedPosition then windowFrame.Position = closedPosition end
                     end
                 end)
             end
@@ -3320,11 +3448,12 @@ local createWindow = (function()
                 if state.min then setMinimized(false) end
                 closeAllPops()
                 state.closeGeneration = (state.closeGeneration or 0) + 1
-                killTween(windowFrame, "Position")
-                local target = closedPosition or windowFrame.Position
-                windowFrame.Position = target + UDim2.fromOffset(0, 14)
+                if not windowFrame.Visible then windowFade.Set(1) end
                 windowFrame.Visible = true
-                tween(windowFrame, 0.22, { Position = target }, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+                windowFrame.Interactable = false
+                windowFade.Play(0, 0.22, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, function()
+                    if not state.closed and not state.destroyed then windowFrame.Interactable = true end
+                end)
             end
 
             local applyFilter = lifecycle.Search
@@ -3418,14 +3547,30 @@ local createWindow = (function()
             local confirmGeneration = 0
             local scrim, card
 
+            settleConfirm = function()
+                if not card then return end
+                confirmGeneration = confirmGeneration + 1
+                confirmFade.Reset()
+                killTween(card, "Position")
+                killTween(scrim, "BackgroundTransparency")
+                if confirmActive then
+                    card.Position = UDim2.new(0.5, 0, 0.5, 0)
+                    scrim.BackgroundTransparency = 0.42
+                else
+                    card.Visible = false
+                    scrim.Visible = false
+                end
+            end
+
             local function hideConfirm()
                 if not confirmActive or state.unloading then return end
                 confirmActive = false
                 confirmGeneration = confirmGeneration + 1
                 local generation = confirmGeneration
                 tween(scrim, 0.15, { BackgroundTransparency = 1 })
-                local exit = tween(card, 0.15, { Position = UDim2.new(0.5, 0, 0.5, 8) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-                completed(exit, function()
+                card.Interactable = false
+                tween(card, 0.15, { Position = UDim2.new(0.5, 0, 0.5, 8) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+                confirmFade.Play(1, 0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.In, function()
                     if generation == confirmGeneration and not confirmActive and not state.destroyed and card.Parent then
                         card.Visible = false
                         scrim.Visible = false
@@ -3563,6 +3708,7 @@ local createWindow = (function()
                     end)
                     cancelB.Activated:Connect(hideConfirm)
                     closeB.Activated:Connect(unloadNow)
+                    confirmFade = Core.fade(card)
                 end
                 confirmActive = true
                 confirmGeneration = confirmGeneration + 1
@@ -3570,9 +3716,12 @@ local createWindow = (function()
                 if not card.Visible then
                     scrim.BackgroundTransparency = 1
                     card.Position = UDim2.new(0.5, 0, 0.5, 8)
+                    confirmFade.Set(1)
                 end
                 scrim.Visible = true
                 card.Visible = true
+                card.Interactable = true
+                confirmFade.Play(0, 0.23, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
                 tween(scrim, 0.20, { BackgroundTransparency = 0.42 })
                 tween(card, 0.23, { Position = UDim2.new(0.5, 0, 0.5, 0) }, Enum.EasingStyle.Quart)
             end
@@ -4283,6 +4432,8 @@ Components.Dropdown = (function()
             end
 
             local transition = 0
+            local popFade = ctx.fade(pop)
+            local direction = -1
             local function setOpen(o)
                 if dd._open == o then return end
                 dd._open = o
@@ -4292,19 +4443,22 @@ Components.Dropdown = (function()
                     closeAllPops(pop)
                     local x, y, cappedH = mountPop(row, pop, popH, row.AbsoluteSize.X)
                     listScroll.CanvasPosition = Vector2.new(0, 0)
-                    local offset = y < row.AbsolutePosition.Y and 7 or -7
+                    direction = y < row.AbsolutePosition.Y and 1 or -1
                     if not pop.Visible then
-                        pop.Position = UDim2.new(0, x, 0, y + offset)
+                        pop.Position = UDim2.new(0, x, 0, y + direction * 7)
+                        popFade.Set(1)
                     end
                     pop.Visible = true
+                    pop.Interactable = true
+                    popFade.Play(0, 0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
                     tween(pop, 0.22, { Position = UDim2.new(0, x, 0, y) }, Enum.EasingStyle.Quart)
                     tween(chev, 0.20, { Rotation = 180 }, Enum.EasingStyle.Quart)
                     registerPop(row, pop, setOpen, cappedH)
                 else
                     local pos = pop.Position
-                    local offset = pos.Y.Offset < row.AbsolutePosition.Y and 6 or -6
-                    local exit = tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + offset) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-                    completed(exit, function()
+                    pop.Interactable = false
+                    tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + direction * 6) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+                    popFade.Play(1, 0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.In, function()
                         if generation == transition and not dd._open and pop.Parent then pop.Visible = false end
                     end)
                     tween(chev, 0.17, { Rotation = 0 }, Enum.EasingStyle.Quart)
@@ -4947,6 +5101,7 @@ Components.ColorPicker = (function()
             bindPad(hue, applyHue)
 
             local transition = 0
+            local popFade = ctx.fade(pop)
             local direction = -1
             local function setOpen(o)
                 if open == o then return end
@@ -4959,16 +5114,20 @@ Components.ColorPicker = (function()
                     direction = y < row.AbsolutePosition.Y and 1 or -1
                     if not pop.Visible then
                         pop.Position = UDim2.new(0, x, 0, y + direction * 6)
+                        popFade.Set(1)
                     end
                     pop.Visible = true
+                    pop.Interactable = true
+                    popFade.Play(0, 0.18, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
                     tween(pop, 0.22, { Position = UDim2.new(0, x, 0, y) }, Enum.EasingStyle.Quart)
                     registerPop(row, pop, setOpen, cappedH, GEO.PopW, true)
                 else
                     inputRouter.Cancel(row)
                     unregisterPop(pop)
                     local pos = pop.Position
-                    local exit = tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + direction * 4) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-                    completed(exit, function()
+                    pop.Interactable = false
+                    tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + direction * 4) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+                    popFade.Play(1, 0.15, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, function()
                         if generation == transition and not open and pop.Parent then
                             pop.Visible = false
                         end
@@ -5887,7 +6046,7 @@ local Reborn = {
 }
 
 Reborn.Theme = Theme.Default
-local Core = createCore(Theme, createAnimation)
+local Core = createCore(Theme, createAnimation, createFade)
 local Icons = createIcons(Core)
 local Notifications = createNotifications(Reborn, Core, Theme, Icons)
 createWindow(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle, createInput, createComponentContext, bindKeybinds, createTooltip, createPillLayout)

@@ -72,6 +72,7 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             Parent = gui,
         })
         corner(panel, GEO.WindowRadius)
+        local panelFade = Core.fade(panel)
         local header = New("Frame", {
             Size = UDim2.new(1, 0, 0, HEADER),
             BackgroundTransparency = 1,
@@ -324,8 +325,9 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
             stop()
             if finalized or not gui.Parent then return end
             killTween(panel, "Size")
-            local exit = tween(panel, 0.16, { Position = panel.Position + UDim2.fromOffset(0, 8) }, Enum.EasingStyle.Sine)
-            completed(exit, function() finalize(false) end)
+            panelFade.Play(1, 0.16, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, function()
+                finalize(false)
+            end)
         end
 
         function Widget:Destroy()
@@ -413,9 +415,8 @@ return function(Reborn, Core, Theme, Icons, Notifications, Components, attachCon
         table.insert(Reborn._widgets, Widget)
         updateLayout(false)
         constrainPosition()
-        local target = panel.Position
-        panel.Position = target - UDim2.fromOffset(0, math.min(8, target.Y.Offset))
-        tween(panel, 0.20, { Position = target }, Enum.EasingStyle.Sine)
+        panelFade.Set(1)
+        panelFade.Play(0, 0.20, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
         return Widget
     end
 end

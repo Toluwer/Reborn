@@ -1,6 +1,7 @@
 local Theme = require(script.Theme)
 local createCore = require(script.Core)
 local createAnimation = require(script.Animation)
+local createFade = require(script.Fade)
 local createIcons = require(script.Icons)
 local createNotifications = require(script.Notifications)
 local createWindow = require(script.Window)
@@ -39,7 +40,7 @@ local Reborn = {
 }
 
 Reborn.Theme = Theme.Default
-local Core = createCore(Theme, createAnimation)
+local Core = createCore(Theme, createAnimation, createFade)
 local Icons = createIcons(Core)
 local Notifications = createNotifications(Reborn, Core, Theme, Icons)
 createWindow(Reborn, Core, Theme, Icons, Notifications, Components, attachConfig, createNavigation, createPopovers, createLifecycle, createInput, createComponentContext, bindKeybinds, createTooltip, createPillLayout)

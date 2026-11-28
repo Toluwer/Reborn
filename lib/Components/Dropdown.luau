@@ -165,6 +165,8 @@ return function(ctx)
         end
 
         local transition = 0
+        local popFade = ctx.fade(pop)
+        local direction = -1
         local function setOpen(o)
             if dd._open == o then return end
             dd._open = o
@@ -174,19 +176,22 @@ return function(ctx)
                 closeAllPops(pop)
                 local x, y, cappedH = mountPop(row, pop, popH, row.AbsoluteSize.X)
                 listScroll.CanvasPosition = Vector2.new(0, 0)
-                local offset = y < row.AbsolutePosition.Y and 7 or -7
+                direction = y < row.AbsolutePosition.Y and 1 or -1
                 if not pop.Visible then
-                    pop.Position = UDim2.new(0, x, 0, y + offset)
+                    pop.Position = UDim2.new(0, x, 0, y + direction * 7)
+                    popFade.Set(1)
                 end
                 pop.Visible = true
+                pop.Interactable = true
+                popFade.Play(0, 0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
                 tween(pop, 0.22, { Position = UDim2.new(0, x, 0, y) }, Enum.EasingStyle.Quart)
                 tween(chev, 0.20, { Rotation = 180 }, Enum.EasingStyle.Quart)
                 registerPop(row, pop, setOpen, cappedH)
             else
                 local pos = pop.Position
-                local offset = pos.Y.Offset < row.AbsolutePosition.Y and 6 or -6
-                local exit = tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + offset) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-                completed(exit, function()
+                pop.Interactable = false
+                tween(pop, 0.15, { Position = UDim2.new(0, pos.X.Offset, 0, pos.Y.Offset + direction * 6) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+                popFade.Play(1, 0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.In, function()
                     if generation == transition and not dd._open and pop.Parent then pop.Visible = false end
                 end)
                 tween(chev, 0.17, { Rotation = 0 }, Enum.EasingStyle.Quart)
